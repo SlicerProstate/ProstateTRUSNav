@@ -1,23 +1,17 @@
-import os
-import unittest
 from __main__ import vtk, qt, ctk, slicer
 
-from GuideletLib import *
+from GuideletLoadable import *
 import logging
-import time
 
-#
-# ProstateTrusNav ###
-#
 
-class ProstateTrusNav(GuideletLoadable):
+class ProstateTRUSNav(GuideletLoadable):
   """Uses GuideletLoadable class, available at:
   """
 
   def __init__(self, parent):
     GuideletLoadable.__init__(self, parent)
     #pydevd.settrace()
-    self.parent.title = "ProstateTrusNavigation"
+    self.parent.title = "ProstateTRUSNavigation"
     self.parent.categories = ["IGT"]
     self.parent.dependencies = []
     self.parent.contributors = [""]
@@ -29,11 +23,8 @@ class ProstateTrusNav(GuideletLoadable):
     and Steve Pieper, Isomics, Inc. and was partially funded by NIH grant 3P41RR013218-12S1.
 """ # replace with organization, grant and thanks.
 
-#
-# ProstateTrusNavWidget
-#
 
-class ProstateTrusNavWidget(GuideletWidget):
+class ProstateTRUSNavWidget(GuideletWidget):
   """Uses GuideletWidget base class, available at:
   """
 
@@ -55,16 +46,13 @@ class ProstateTrusNavWidget(GuideletWidget):
     return parameterlist
 
   def createGuideletInstance(self, parameterList = None):
-    return ProstateTrusNavGuidelet(None, self.guideletLogic,  parameterList)
+    return ProstateTRUSNavGuidelet(None, self.guideletLogic,  parameterList)
 
   def createGuideletLogic(self):
-    return ProstateTrusNavLogic()
+    return ProstateTRUSNavLogic()
 
-#
-# ProstateTrusNavLogic ###
-#
 
-class ProstateTrusNavLogic(GuideletLogic):
+class ProstateTRUSNavLogic(GuideletLogic):
   """Uses GuideletLogic base class, available at:
   """ 
 
@@ -73,7 +61,7 @@ class ProstateTrusNavLogic(GuideletLogic):
 
   def createParameterNode(self):
     node = GuideletLogic.createParameterNode(self)
-    parameterList = {'RecordingFilenamePrefix': "ProstateTrusNavRecording-",
+    parameterList = {'RecordingFilenamePrefix': "ProstateTRUSNavRecording-",
                      'RecordingFilenameExtension': ".mhd",
                      'DefaultSavedScenesPath': os.path.dirname(slicer.modules.prostatetrusnav.path)+'/SavedScenes',
                      'PivotCalibrationErrorThresholdMm':  0.9,
@@ -89,11 +77,8 @@ class ProstateTrusNavLogic(GuideletLogic):
 
     return node
 	
-#	
-#	ProstateTrusNavTest ###
-#
 
-class ProstateTrusNavTest(GuideletTest):
+class ProstateTRUSNavTest(GuideletTest):
   """This is the test case for your scripted module.
   """
   
@@ -101,23 +86,24 @@ class ProstateTrusNavTest(GuideletTest):
     """Run as few or as many tests as needed here.
     """
     GuideletTest.runTest(self)
-    #self.test_ProstateTrusNav1() #add applet specific tests here
+    #self.test_ProstateTRUSNav1() #add applet specific tests here
 
-class ProstateTrusNavGuidelet(Guidelet):
+
+class ProstateTRUSNavGuidelet(Guidelet):
 
   def __init__(self, parent, logic, parameterList=None, widgetClass=None):
     Guidelet.__init__(self, parent, logic, parameterList, widgetClass)
-    logging.debug('ProstateTrusNavGuidelet.__init__')
+    logging.debug('ProstateTRUSNavGuidelet.__init__')
 
-    moduleDirectoryPath = slicer.modules.prostatetrusnav.path.replace('ProstateTrusNav.py', '')
+    moduleDirectoryPath = slicer.modules.prostatetrusnav.path.replace('ProstateTRUSNav.py', '')
 
     # Set up main frame.
 
-    self.sliceletDockWidget.setObjectName('ProstateTrusNavPanel')
-    self.sliceletDockWidget.setWindowTitle('ProstateTrusNav')
+    self.sliceletDockWidget.setObjectName('ProstateTRUSNavPanel')
+    self.sliceletDockWidget.setWindowTitle('ProstateTRUSNav')
     
-    self.mainWindow.setWindowTitle('ProstateTrusNavigation')
-    self.mainWindow.windowIcon = qt.QIcon(moduleDirectoryPath + '/Resources/Icons/ProstateTrusNav.png')
+    self.mainWindow.setWindowTitle('ProstateTRUSNavigation')
+    self.mainWindow.windowIcon = qt.QIcon(moduleDirectoryPath + '/Resources/Icons/ProstateTRUSNav.png')
 
     self.addConnectorObservers()
     
@@ -148,9 +134,9 @@ class ProstateTrusNavGuidelet(Guidelet):
   #   button.setStyleSheet(style)
     
   def setupConnections(self):#find common connections, add specials in overridden method
-    logging.debug('ProstateTrusNav.setupConnections()')
+    logging.debug('ProstateTRUSNav.setupConnections()')
     Guidelet.setupConnections(self)
-    
+
   def setupScene(self): #applet specific
     logging.debug('setupScene')
     Guidelet.setupScene(self)
@@ -169,5 +155,5 @@ class ProstateTrusNavGuidelet(Guidelet):
     dataProbeParameterNode.SetParameter('showSliceViewAnnotations', '0')
 
   def disconnect(self):
-    logging.debug('ProstateTrusNav.disconnect()')
+    logging.debug('ProstateTRUSNav.disconnect()')
     Guidelet.disconnect(self)
