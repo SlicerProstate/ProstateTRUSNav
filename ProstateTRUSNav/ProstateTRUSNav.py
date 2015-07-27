@@ -3,7 +3,7 @@ from __main__ import vtk, qt, ctk, slicer
 from GuideletLoadable import *
 import logging
 import os
-
+from subprocess import Popen
 
 class ProstateTRUSNav(GuideletLoadable):
   """Uses GuideletLoadable class, available at:
@@ -31,15 +31,54 @@ class ProstateTRUSNavWidget(GuideletWidget):
 
   def __init__(self, parent = None):
     GuideletWidget.__init__(self, parent)
+    self.configurationFile = ""
+    self.PlusServerProcess = None
     # do specific init here
 
   def setup(self):
+
+    plusServerCollapsibleButton = ctk.ctkCollapsibleButton()
+    self.layout.addWidget(plusServerCollapsibleButton)
+    self.configurationFileChooserButton = qt.QPushButton(self.configurationFile)
+    self.configurationFileChooserButton.connect('clicked()', self.onConfigFileSelected)
+    self.runPlusServerButton = qt.QPushButton("Run PlusServer")
+    self.runPlusServerButton.setEnabled(False)
+    self.runPlusServerButton.setCheckable(True)
+    self.runPlusServerButton.connect('clicked()', self.onRunPlusServerButtonClicked)
+
+    self.serverFormLayout = qt.QFormLayout(plusServerCollapsibleButton)
+    hbox = qt.QHBoxLayout()
+    hbox.addWidget(self.configurationFileChooserButton)
+    hbox.addWidget(self.runPlusServerButton)
+    self.serverFormLayout.addRow(hbox)
+    # add xml selector
+    # add button for launching server
     GuideletWidget.setup(self)
     # do specific setup here
+    self.launchGuideletButton.setEnabled(False)
 
   def addLauncherWidgets(self):
     GuideletWidget.addLauncherWidgets(self)
     # add launcher widget here
+
+  def onConfigFileSelected(self):
+    self.configurationFile = qt.QFileDialog.getOpenFileName(self.parent, "Choose Configuration File", "", "*.xml")
+    if self.configurationFile != "":
+      self.configurationFileChooserButton.setText(self.configurationFile)
+      self.runPlusServerButton.setEnabled(True)
+
+  def onRunPlusServerButtonClicked(self):
+    # PlusServer.exe --config-file=..\..\PlusLib\data\ConfigFiles\Testing\PlusConfiguration_OpenIGTLinkCommandsTest.xml
+    if self.runPlusServerButton.isChecked():
+      self.PlusServerProcess = Popen(['PlusServer', "--config-file="+self.configurationFile])
+      if self.PlusServerProcess:
+        self.runPlusServerButton.setText("Quit Plus Server")
+        self.launchGuideletButton.setEnabled(True)
+    else:
+      if self.PlusServerProcess:
+        self.PlusServerProcess.terminate()
+        self.runPlusServerButton.setText("Run PlusServer")
+        self.launchGuideletButton.setEnabled(False)
 
   def collectParameterList(self):
     parameterList = GuideletWidget.collectParameterList(self)
@@ -495,18 +534,15 @@ class ProstateTRUSNavUltrasound(UltraSound):
     return label
 
   def setupConnections(self):
-    print "setup Connections"
     self.linkInputSelector.connect("nodeActivated(vtkMRMLNode*)", self.onConnectorNodeSelected)
     self.startStopRecordingButton.connect('clicked(bool)', self.onStartStopRecordingButtonClicked)
     self.offlineReconstructButton.connect('clicked(bool)', self.onReconstVolume)
     self.startStopScoutScanButton.connect('clicked(bool)', self.onStartStopScoutScanButtonClicked)
     self.startStopLiveReconstructionButton.connect('clicked(bool)', self.onStartStopLiveReconstructionButtonClicked)
     self.displayRoiButton.connect('clicked(bool)', self.onDisplayRoiButtonClicked)
-    # self.parameterNodeSelector.connect('currentNodeIDChanged(QString)', self.onParameterSetSelected)
     self.linkInputSelector.connect('currentNodeIDChanged(QString)', self.updateParameterNodeFromGui)
     self.captureIDSelector.connect('currentIndexChanged(QString)', self.updateParameterNodeFromGui)
     self.volumeReconstructorIDSelector.connect('currentIndexChanged(QString)', self.updateParameterNodeFromGui)
-    # self.displayDefaultLayoutButton.connect('clicked(bool)', self.updateParameterNodeFromGui)
     self.filenameBox.connect('textEdited(QString)', self.updateParameterNodeFromGui)
     self.offlineVolumeToReconstructSelector.connect('currentIndexChanged(int)', self.updateParameterNodeFromGui)
     self.scoutScanRecordingLineEdit.connect('textEdited(QString)', self.updateParameterNodeFromGui)
@@ -518,6 +554,28 @@ class ProstateTRUSNavUltrasound(UltraSound):
     self.liveFilenameCompletionBox.connect('clicked(bool)', self.updateParameterNodeFromGui)
     self.snapshotTimer.timeout.connect(self.onRequestVolumeReconstructionSnapshot)
     self.connectDisconnectButton.connect('clicked(bool)', self.onConnectDisconnectButtonClicked)
+
+  def disconnect(self):
+    self.linkInputSelector.disconnect("nodeActivated(vtkMRMLNode*)", self.onConnectorNodeSelected)
+    self.startStopRecordingButton.disconnect('clicked(bool)', self.onStartStopRecordingButtonClicked)
+    self.offlineReconstructButton.disconnect('clicked(bool)', self.onReconstVolume)
+    self.startStopScoutScanButton.disconnect('clicked(bool)', self.onStartStopScoutScanButtonClicked)
+    self.startStopLiveReconstructionButton.disconnect('clicked(bool)', self.onStartStopLiveReconstructionButtonClicked)
+    self.displayRoiButton.disconnect('clicked(bool)', self.onDisplayRoiButtonClicked)
+    self.linkInputSelector.disconnect('currentNodeIDChanged(QString)', self.updateParameterNodeFromGui)
+    self.captureIDSelector.disconnect('currentIndexChanged(QString)', self.updateParameterNodeFromGui)
+    self.volumeReconstructorIDSelector.disconnect('currentIndexChanged(QString)', self.updateParameterNodeFromGui)
+    self.filenameBox.disconnect('textEdited(QString)', self.updateParameterNodeFromGui)
+    self.offlineVolumeToReconstructSelector.disconnect('currentIndexChanged(int)', self.updateParameterNodeFromGui)
+    self.scoutScanRecordingLineEdit.disconnect('textEdited(QString)', self.updateParameterNodeFromGui)
+    self.scoutFilenameCompletionBox.disconnect('clicked(bool)', self.updateParameterNodeFromGui)
+    self.displayRoiButton.disconnect('clicked(bool)', self.updateParameterNodeFromGui)
+    self.outputExtentROIBoxDirection1.disconnect('valueChanged(double)', self.updateParameterNodeFromGui)
+    self.outputExtentROIBoxDirection2.disconnect('valueChanged(double)', self.updateParameterNodeFromGui)
+    self.outputExtentROIBoxDirection3.disconnect('valueChanged(double)', self.updateParameterNodeFromGui)
+    self.liveFilenameCompletionBox.disconnect('clicked(bool)', self.updateParameterNodeFromGui)
+    self.snapshotTimer.timeout.disconnect(self.onRequestVolumeReconstructionSnapshot)
+    self.connectDisconnectButton.disconnect('clicked(bool)', self.onConnectDisconnectButtonClicked)
 
   def setupIcons(self):
     self.plusRemoteModuleDirectoryPath = slicer.modules.plusremote.path.replace("PlusRemote.py", "")
