@@ -64,7 +64,7 @@ class ProstateTRUSNavWidget(GuideletWidget):
   def onConfigFileSelected(self):
     self.configurationFile = qt.QFileDialog.getOpenFileName(self.parent, "Choose Configuration File", "", "*.xml")
     if self.configurationFile != "":
-      self.configurationFileChooserButton.setText(self.configurationFile)
+      self.configurationFileChooserButton.setText(os.path.split(self.configurationFile)[1])
       self.runPlusServerButton.setEnabled(True)
 
   def onRunPlusServerButtonClicked(self):
@@ -205,7 +205,6 @@ class ProstateTRUSNavGuidelet(Guidelet):
 
   def setupScene(self): #applet specific
     logging.debug('setupScene')
-    Guidelet.setupScene(self)
 
     logging.debug('Create transforms')
 
@@ -219,6 +218,8 @@ class ProstateTRUSNavGuidelet(Guidelet):
     dataProbeUtil=DataProbe.DataProbeLib.DataProbeUtil()
     dataProbeParameterNode=dataProbeUtil.getParameterNode()
     dataProbeParameterNode.SetParameter('showSliceViewAnnotations', '0')
+
+    Guidelet.setupScene(self)
 
   def showDefaultView(self):
     self.onViewSelect(self.viewUltrasound3d)
@@ -317,13 +318,9 @@ class ProstateTRUSNavUltrasound(UltraSound):
 
     self.setupIcons()
 
-    self.captureIDLabel = self.createLabel("Capture Device ID:")
-
     self.captureIDSelector = qt.QComboBox()
     self.captureIDSelector.setToolTip("Pick capture device ID")
     self.captureIDSelector.setSizePolicy(qt.QSizePolicy.Expanding, qt.QSizePolicy.Expanding)
-
-    self.volumeReconstructorIDLabel = self.createLabel("  Reconstructor Device ID:")
 
     self.volumeReconstructorIDSelector = qt.QComboBox()
     self.volumeReconstructorIDSelector.setToolTip( "Pick volume reconstructor device ID" )
@@ -403,15 +400,10 @@ class ProstateTRUSNavUltrasound(UltraSound):
     self.startStopLiveReconstructionButton.setEnabled(False)
     self.startStopLiveReconstructionButton.setSizePolicy(qt.QSizePolicy.Expanding, qt.QSizePolicy.Expanding)
 
-    liveReconstructionParametersControlsLayout = qt.QGridLayout()
-    self.displayRoiLabel = self.createLabel("ROI:")
-    liveReconstructionParametersControlsLayout.addWidget(self.displayRoiLabel, 0, 0)
-
     self.displayRoiButton = qt.QToolButton()
     self.displayRoiButton.setCheckable(True)
     self.displayRoiButton.setIcon(self.visibleOffIcon)
     self.displayRoiButton.setToolTip("If clicked, display ROI")
-    liveReconstructionParametersControlsLayout.addWidget(self.displayRoiButton, 0, 1)
 
     liveReconstructionAdvancedParametersLayout = qt.QGridLayout()
 
@@ -839,10 +831,7 @@ class ProstateTRUSNavUltrasound(UltraSound):
       return str(self.scoutScanRecordingLineEdit.text)
 
   def getLiveReconstructionOutputFilename(self):
-    if self.liveFilenameCompletionBox.isChecked():
-      return self.plusRemoteLogic.addTimestampToFilename(self.liveVolumeToReconstructFilename.text)
-    else:
-      return str(self.liveVolumeToReconstructFilename.text)
+    return self.plusRemoteLogic.addTimestampToFilename(self.liveVolumeToReconstructFilename.text)
 
 #
 # Commands
