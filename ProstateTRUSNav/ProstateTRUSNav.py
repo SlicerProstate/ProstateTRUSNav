@@ -259,6 +259,19 @@ class ProstateTRUSNavUltrasound(UltraSound):
   OUTPUT_VOLUME_SPACING = 3
   LIVE_OUTPUT_VOLUME_SPACING = 1
 
+  @property
+  def roiNode(self):
+    return self._roiNode
+
+  @roiNode.setter
+  def roiNode(self, node):
+    self._roiNode=node
+    if node is not None:
+      self.startStopLiveReconstructionButton.setEnabled(True)
+    else:
+      self.startStopLiveReconstructionButton.setEnabled(False)
+
+
   def __init__(self, guideletParent):
     UltraSound.__init__(self, guideletParent)
 
@@ -267,7 +280,7 @@ class ProstateTRUSNavUltrasound(UltraSound):
     self.connectorNode = None
     self.connectorNodeObserverTagList = []
     self.connectorNodeConnected = False
-    self.roiNode = None
+    self._roiNode = None
     self.liveOutputSpacingValue = [1.0,1.0,1.0]
     self.outputOriginValue = None
     self.outputExtentValue = None
@@ -427,7 +440,7 @@ class ProstateTRUSNavUltrasound(UltraSound):
     liveReconstructionAdvancedParametersControlsLayout.addWidget(self.outputExtentLiveReconstructionLabel, 0, 0)
 
     hbox = qt.QHBoxLayout()
-    # hbox.addWidget(self.startStopScoutScanButton)
+    hbox.addWidget(self.startStopScoutScanButton)
     hbox.addWidget(self.startStopLiveReconstructionButton)
     ultrasoundLayout.addRow(hbox)
 
@@ -852,10 +865,8 @@ class ProstateTRUSNavUltrasound(UltraSound):
                              self.onScoutVolumeRecorded)
 
   def onStartReconstruction(self):
-    if not self.roiNode:
-      self.onStartScoutRecording()
-      qt.QTimer.singleShot(100, self.onStopScoutRecording)
-      return
+    if self.roiNode:
+      self.updateVolumeExtentFromROI()
     self.plusRemoteLogic.startVolumeReconstuction(self.linkInputSelector.currentNode().GetID(),
                                          self.volumeReconstructorIDSelector.currentText,
                                          self.liveOutputSpacingValue, self.outputOriginValue,
@@ -937,7 +948,8 @@ class ProstateTRUSNavUltrasound(UltraSound):
     self.startStopRecordingButton.setEnabled(True)
     self.offlineReconstructButton.setEnabled(True)
     self.startStopScoutScanButton.setEnabled(True)
-    self.startStopLiveReconstructionButton.setEnabled(True)
+    if self.roiNode:
+      self.startStopLiveReconstructionButton.setEnabled(True)
 
   def onVolumeRecorded(self, command, q):
     self.printCommandResponse(command, q)
@@ -1019,7 +1031,7 @@ class ProstateTRUSNavUltrasound(UltraSound):
     applicationLogic.FitSliceToAll()
 
     #3D view
-    # self.showVolumeRendering(scoutScanVolumeNode)
+    self.guideletParent.showVolumeRendering(scoutScanVolumeNode)
 
   def onSnapshotAcquired(self, command, q):
     self.printCommandResponse(command,q)
@@ -1107,5 +1119,3 @@ class ProstateTRUSNavUltrasound(UltraSound):
     self.outputExtentROIBoxDirection1.value = self.outputExtentValue[1]
     self.outputExtentROIBoxDirection2.value = self.outputExtentValue[3]
     self.outputExtentROIBoxDirection3.value = self.outputExtentValue[5]
-
-    self.onStartReconstruction()
