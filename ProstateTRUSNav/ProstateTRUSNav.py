@@ -291,6 +291,9 @@ class ProstateTRUSNavGuidelet(Guidelet):
 class ProstateTRUSNavUltrasound(UltraSound):
 
   SCOUT_VOLUME_FILENAME = "ScoutScan.mha"
+  RECORDING_FILENAME = "Recording.mha"
+  SCOUT_RECORDING_FILENAME = "ScoutScanRecording.mha"
+  LIVE_RECORDING_FILENAME = "LiveRecording.mha"
   SCOUT_VOLUME_NODE_NAME = "ScoutScan"
   OFFLINE_VOLUME_NODE_NAME = "RecVol_Reference"
   LIVE_VOLUME_NODE_NAME = "liveReconstruction"
@@ -377,12 +380,6 @@ class ProstateTRUSNavUltrasound(UltraSound):
     self.filenameLabel = self.createLabel("Filename:", visible=False)
     recordParametersControlsLayout.addWidget(self.filenameLabel, 1, 0)
 
-    self.filenameBox = qt.QLineEdit()
-    self.filenameBox.setToolTip("Set filename (optional)")
-    self.filenameBox.visible = False
-    self.filenameBox.setText("Recording.mha")
-    recordParametersControlsLayout.addWidget(self.filenameBox, 1, 1)
-
      # Offline Reconstruction
     self.offlineReconstructButton = qt.QPushButton("  Offline Reconstruction")
     self.offlineReconstructButton.setCheckable(True)
@@ -422,12 +419,6 @@ class ProstateTRUSNavUltrasound(UltraSound):
 
     self.scoutScanFilenameLabel = self.createLabel("Recording filename:", visible=False)
     self.scoutScanFilenameLabel.setSizePolicy(qt.QSizePolicy.Minimum, qt.QSizePolicy.Minimum)
-
-    self.scoutScanRecordingLineEdit = qt.QLineEdit()
-    self.scoutScanRecordingLineEdit.visible = False
-    self.scoutScanRecordingLineEdit.setToolTip( "Scout scan recording filename" )
-    self.scoutScanRecordingLineEdit.setText("ScoutScanRecording.mha")
-    self.scoutScanRecordingLineEdit.setSizePolicy(qt.QSizePolicy.Expanding, qt.QSizePolicy.Expanding)
 
     self.scoutFilenameCompletionBox = qt.QCheckBox()
     self.scoutFilenameCompletionBox.visible = False
@@ -587,9 +578,7 @@ class ProstateTRUSNavUltrasound(UltraSound):
     self.linkInputSelector.connect('currentNodeIDChanged(QString)', self.updateParameterNodeFromGui)
     self.captureIDSelector.connect('currentIndexChanged(QString)', self.updateParameterNodeFromGui)
     self.volumeReconstructorIDSelector.connect('currentIndexChanged(QString)', self.updateParameterNodeFromGui)
-    self.filenameBox.connect('textEdited(QString)', self.updateParameterNodeFromGui)
     self.offlineVolumeToReconstructSelector.connect('currentIndexChanged(int)', self.updateParameterNodeFromGui)
-    self.scoutScanRecordingLineEdit.connect('textEdited(QString)', self.updateParameterNodeFromGui)
     self.scoutFilenameCompletionBox.connect('clicked(bool)', self.updateParameterNodeFromGui)
     self.displayRoiButton.connect('clicked(bool)', self.updateParameterNodeFromGui)
     self.outputExtentROIBoxDirection1.connect('valueChanged(double)', self.updateParameterNodeFromGui)
@@ -609,9 +598,7 @@ class ProstateTRUSNavUltrasound(UltraSound):
     self.linkInputSelector.disconnect('currentNodeIDChanged(QString)', self.updateParameterNodeFromGui)
     self.captureIDSelector.disconnect('currentIndexChanged(QString)', self.updateParameterNodeFromGui)
     self.volumeReconstructorIDSelector.disconnect('currentIndexChanged(QString)', self.updateParameterNodeFromGui)
-    self.filenameBox.disconnect('textEdited(QString)', self.updateParameterNodeFromGui)
     self.offlineVolumeToReconstructSelector.disconnect('currentIndexChanged(int)', self.updateParameterNodeFromGui)
-    self.scoutScanRecordingLineEdit.disconnect('textEdited(QString)', self.updateParameterNodeFromGui)
     self.scoutFilenameCompletionBox.disconnect('clicked(bool)', self.updateParameterNodeFromGui)
     self.displayRoiButton.disconnect('clicked(bool)', self.updateParameterNodeFromGui)
     self.outputExtentROIBoxDirection1.disconnect('valueChanged(double)', self.updateParameterNodeFromGui)
@@ -633,7 +620,7 @@ class ProstateTRUSNavUltrasound(UltraSound):
     if self.parameterNode and self.parameterNodeObserver:
       self.parameterNode.RemoveObserver(self.parameterNodeObserver)
       self.parameterNodeObserver = self.parameterNode.AddObserver('currentNodeChanged(vtkMRMLNode*)',
-                                                                  self.updateGUIFromParameterNode)
+                                                                  self.updateGuiFromParameterNode)
     # Set up default values for new nodes
     if self.parameterNode:
       self.plusRemoteLogic.setDefaultParameters(self.parameterNode)
@@ -649,14 +636,6 @@ class ProstateTRUSNavUltrasound(UltraSound):
         self.parameterValueList[parameter].blockSignals(True)
         self.parameterValueList[parameter].setValue(float(self.parameterNode.GetParameter(parameter)))
       self.parameterValueList[parameter].blockSignals(False)
-
-    self.parameterBoxList = {'RecordingFilename': self.filenameBox,
-                             'ScoutScanFilename': self.scoutScanRecordingLineEdit}
-    for parameter in self.parameterBoxList:
-      if self.parameterNode.GetParameter(parameter):
-        self.parameterBoxList[parameter].blockSignals(True)
-        self.parameterBoxList[parameter].setText(self.parameterNode.GetParameter(parameter))
-      self.parameterBoxList[parameter].blockSignals(False)
 
     self.parameterCheckBoxList = {'RoiDisplay': self.displayRoiButton,
                                   'ScoutFilenameCompletion': self.scoutFilenameCompletionBox,
@@ -715,8 +694,6 @@ class ProstateTRUSNavUltrasound(UltraSound):
                            'RoiExtent2': self.outputExtentROIBoxDirection2.value,
                            'RoiExtent3': self.outputExtentROIBoxDirection3.value,
                            'OfflineVolumeToReconstruct': self.offlineVolumeToReconstructSelector.currentIndex,
-                           'RecordingFilename': self.filenameBox.text,
-                           'ScoutScanFilename': self.scoutScanRecordingLineEdit.text,
                            'ScoutFilenameCompletion': self.scoutFilenameCompletionBox.isChecked(),
                            'LiveFilenameCompletion': self.liveFilenameCompletionBox.isChecked()}
     for parameter in self.parametersList:
@@ -804,35 +781,36 @@ class ProstateTRUSNavUltrasound(UltraSound):
       self.startStopRecordingButton.setText("  Stop Recording")
       self.startStopRecordingButton.setIcon(self.stopIcon)
       self.startStopRecordingButton.setToolTip( "If clicked, stop recording" )
-      self.onStartRecording()
+      self.onStartRecording(self.generateRecordingOutputFilename())
     else:
       self.startStopRecordingButton.setText("  Start Recording")
       self.startStopRecordingButton.setIcon(self.recordIcon)
       self.startStopRecordingButton.setToolTip( "If clicked, start recording" )
-      self.onStopRecording()
+      self.onStopRecording(self.onVolumeRecorded)
 
   def onStartStopScoutScanButtonClicked(self):
     if self.startStopScoutScanButton.isChecked():
       self.startStopScoutScanButton.setText("  Scout Scan\n  Stop Recording and Reconstruct Recorded Volume")
       self.startStopScoutScanButton.setIcon(self.stopIcon)
       self.startStopScoutScanButton.setToolTip( "If clicked, stop recording and reconstruct recorded volume" )
-      self.onStartScoutRecording()
+      self.onStartRecording(self.generateScoutRecordingOutputFilename())
     else:
-      self.onStopScoutRecording()
+      self.onStopRecording(self.onScoutVolumeRecorded)
 
   def onStartStopLiveReconstructionButtonClicked(self):
-
     if self.startStopLiveReconstructionButton.isChecked():
       if self.roiNode:
         self.updateVolumeExtentFromROI()
       self.startStopLiveReconstructionButton.setText("  Stop Live Reconstruction")
       self.startStopLiveReconstructionButton.setIcon(self.stopIcon)
       self.startStopLiveReconstructionButton.setToolTip( "If clicked, stop live reconstruction" )
+      self.onStartRecording(self.getLiveRecordingOutputFilename())
       self.onStartReconstruction()
     else:
       self.startStopLiveReconstructionButton.setText("  Start Live Reconstruction")
       self.startStopLiveReconstructionButton.setIcon(self.recordIcon)
       self.startStopLiveReconstructionButton.setToolTip( "If clicked, start live reconstruction" )
+      self.onStopRecording(self.printCommandResponse)
       self.onStopReconstruction()
 
   def onDisplayRoiButtonClicked(self):
@@ -847,27 +825,17 @@ class ProstateTRUSNavUltrasound(UltraSound):
       if self.roiNode:
         self.roiNode.SetDisplayVisibility(0)
 
-  def onDisplayDefaultLayoutButtonClicked(self):
-    #Display live image in red view if button checked
-    redLogic = slicer.app.layoutManager().sliceWidget('Red').sliceLogic()
-    if self.displayDefaultLayoutButton.isChecked():
-      self.displayRoiButton.setToolTip("If clicked, hide live image")
-      redLogic.GetSliceCompositeNode().SetBackgroundVolumeID(slicer.util.getNode('Image_Reference').GetID())
-    else:
-      self.displayRoiButton.setToolTip("If clicked, show live image")
-      redLogic.GetSliceCompositeNode().SetBackgroundVolumeID(slicer.util.getNode('None'))
-
 #
 # Filenames completion
 #
   def generateRecordingOutputFilename(self):
-      return self.plusRemoteLogic.addTimestampToFilename(self.filenameBox.text)
+    return self.plusRemoteLogic.addTimestampToFilename(self.RECORDING_FILENAME)
 
   def generateScoutRecordingOutputFilename(self):
-    if self.scoutFilenameCompletionBox.isChecked():
-      return self.plusRemoteLogic.addTimestampToFilename(self.scoutScanRecordingLineEdit.text)
-    else:
-      return str(self.scoutScanRecordingLineEdit.text)
+    return self.plusRemoteLogic.addTimestampToFilename(self.SCOUT_RECORDING_FILENAME)
+
+  def getLiveRecordingOutputFilename(self):
+    return self.plusRemoteLogic.addTimestampToFilename(self.LIVE_RECORDING_FILENAME)
 
   def getLiveReconstructionOutputFilename(self):
     return self.plusRemoteLogic.addTimestampToFilename(self.liveVolumeToReconstructFilename.text)
@@ -875,22 +843,13 @@ class ProstateTRUSNavUltrasound(UltraSound):
 #
 # Commands
 #
-  def onStartRecording(self):
+  def onStartRecording(self, filename):
     self.plusRemoteLogic.startRecording(self.linkInputSelector.currentNode().GetID(), self.captureIDSelector.currentText,
-                              self.generateRecordingOutputFilename(), self.printCommandResponse)
+                              filename, self.printCommandResponse)
 
-  def onStopRecording(self):
+  def onStopRecording(self, callback):
     self.plusRemoteLogic.stopRecording(self.linkInputSelector.currentNode().GetID(), self.captureIDSelector.currentText,
-                             self.onVolumeRecorded)
-
-  def onStartScoutRecording(self):
-    self.lastScoutRecordingOutputFilename = self.generateScoutRecordingOutputFilename()
-    self.plusRemoteLogic.startRecording(self.linkInputSelector.currentNode().GetID(), self.captureIDSelector.currentText,
-                              self.lastScoutRecordingOutputFilename, self.printCommandResponse)
-
-  def onStopScoutRecording(self):
-    self.plusRemoteLogic.stopRecording(self.linkInputSelector.currentNode().GetID(), self.captureIDSelector.currentText,
-                             self.onScoutVolumeRecorded)
+                             callback)
 
   def onStartReconstruction(self):
     if self.roiNode:
