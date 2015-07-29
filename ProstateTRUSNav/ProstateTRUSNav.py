@@ -29,11 +29,14 @@ class ProstateTRUSNavWidget(GuideletWidget):
   """Uses GuideletWidget base class, available at:
   """
 
+  DEFAULT_PLUSSERVER_CHOOSER_TEXT = "Choose PlusServer.exe"
+  DEFAULT_CONFIGURATION_CHOOSER_TEXT = "Select Configuration"
+
   def __init__(self, parent = None):
     GuideletWidget.__init__(self, parent)
-    self.configurationFile = ""
-    self.PlusServerProcess = None
-    # do specific init here
+    self.plusServerProcess = None
+    self.configurationFile = self.getSetting('ConfigurationFile', self.DEFAULT_CONFIGURATION_CHOOSER_TEXT)
+    self.serverExecutable = self.getSetting('PlusServer', self.DEFAULT_PLUSSERVER_CHOOSER_TEXT)
 
   def setup(self):
 
@@ -42,11 +45,18 @@ class ProstateTRUSNavWidget(GuideletWidget):
     self.configurationFileChooserButton = qt.QPushButton(self.configurationFile)
     self.configurationFileChooserButton.connect('clicked()', self.onConfigFileSelected)
     self.runPlusServerButton = qt.QPushButton("Run PlusServer")
-    self.runPlusServerButton.setEnabled(False)
     self.runPlusServerButton.setCheckable(True)
     self.runPlusServerButton.connect('clicked()', self.onRunPlusServerButtonClicked)
 
     self.serverFormLayout = qt.QFormLayout(plusServerCollapsibleButton)
+
+    self.serverExecutableChooserButton = qt.QPushButton(self.serverExecutable)
+    self.serverExecutableChooserButton.connect('clicked()', self.onServerExecutableSelected)
+
+    hbox = qt.QHBoxLayout()
+    hbox.addWidget(self.serverExecutableChooserButton)
+    self.serverFormLayout.addRow(hbox)
+
     hbox = qt.QHBoxLayout()
     hbox.addWidget(self.configurationFileChooserButton)
     hbox.addWidget(self.runPlusServerButton)
@@ -57,26 +67,55 @@ class ProstateTRUSNavWidget(GuideletWidget):
     # do specific setup here
     self.launchGuideletButton.setEnabled(False)
 
+    self.checkCommandAndArgument()
+
+  def checkCommandAndArgument(self):
+    if os.path.exists(self.serverExecutable) and os.path.exists(self.configurationFile):
+      self.runPlusServerButton.setEnabled(True)
+    else:
+      self.runPlusServerButton.setEnabled(False)
+
+  def getSetting(self, settingName, defaultValue=""):
+    settings = qt.QSettings()
+    value = settings.value(self.moduleName + '/' + settingName, defaultValue)
+    return value if value is not None and value != "" else defaultValue
+
+  def setSetting(self, settingName, value):
+    settings = qt.QSettings()
+    settings.setValue(self.moduleName + '/'+ settingName, value)
+
   def addLauncherWidgets(self):
     GuideletWidget.addLauncherWidgets(self)
     # add launcher widget here
 
+  def onServerExecutableSelected(self):
+    executable = qt.QFileDialog.getOpenFileName(self.parent, "PlusServer Executable",
+                                                           self.serverExecutable, "*.exe")
+    if executable != "" and executable.find("PlusServer.exe"):
+      self.serverExecutable = executable
+      self.serverExecutableChooserButton.setText(executable)
+      self.setSetting("PlusServer", executable)
+    self.checkCommandAndArgument()
+
   def onConfigFileSelected(self):
-    self.configurationFile = qt.QFileDialog.getOpenFileName(self.parent, "Choose Configuration File", "", "*.xml")
+    self.configurationFile = qt.QFileDialog.getOpenFileName(self.parent, "Choose Configuration File",
+                                                            self.configurationFile, "*.xml")
     if self.configurationFile != "":
       self.configurationFileChooserButton.setText(os.path.split(self.configurationFile)[1])
-      self.runPlusServerButton.setEnabled(True)
+      self.setSetting("ConfigurationFile", self.configurationFile)
+    self.checkCommandAndArgument()
 
   def onRunPlusServerButtonClicked(self):
-    # PlusServer.exe --config-file=..\..\PlusLib\data\ConfigFiles\Testing\PlusConfiguration_OpenIGTLinkCommandsTest.xml
     if self.runPlusServerButton.isChecked():
-      self.PlusServerProcess = Popen(['PlusServer', "--config-file="+self.configurationFile])
-      if self.PlusServerProcess:
+      command = [self.serverExecutable, "--config-file="+self.configurationFile]
+      logging.info("Executing %s %s" % tuple(command))
+      self.plusServerProcess = Popen([self.serverExecutable, "--config-file="+self.configurationFile])
+      if self.plusServerProcess:
         self.runPlusServerButton.setText("Quit Plus Server")
         self.launchGuideletButton.setEnabled(True)
     else:
-      if self.PlusServerProcess:
-        self.PlusServerProcess.terminate()
+      if self.plusServerProcess:
+        self.plusServerProcess.terminate()
         self.runPlusServerButton.setText("Run PlusServer")
         self.launchGuideletButton.setEnabled(False)
 
