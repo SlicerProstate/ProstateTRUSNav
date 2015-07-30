@@ -5,6 +5,7 @@ import logging
 import os
 from subprocess import Popen
 
+
 class ProstateTRUSNav(GuideletLoadable):
   """Uses GuideletLoadable class, available at:
   """
@@ -38,6 +39,11 @@ class ProstateTRUSNavWidget(GuideletWidget):
     self.configurationFile = self.getSetting('ConfigurationFile', self.DEFAULT_CONFIGURATION_CHOOSER_TEXT)
     self.serverExecutable = self.getSetting('PlusServer', self.DEFAULT_PLUSSERVER_CHOOSER_TEXT)
 
+  def cleanup(self):
+    GuideletWidget.cleanup(self)
+    if self.plusServerProcess:
+      self.plusServerProcess.terminate()
+
   def setup(self):
 
     plusServerCollapsibleButton = ctk.ctkCollapsibleButton()
@@ -61,8 +67,6 @@ class ProstateTRUSNavWidget(GuideletWidget):
     hbox.addWidget(self.configurationFileChooserButton)
     hbox.addWidget(self.runPlusServerButton)
     self.serverFormLayout.addRow(hbox)
-    # add xml selector
-    # add button for launching server
     GuideletWidget.setup(self)
     # do specific setup here
     self.launchGuideletButton.setEnabled(False)
@@ -90,7 +94,7 @@ class ProstateTRUSNavWidget(GuideletWidget):
 
   def onServerExecutableSelected(self):
     executable = qt.QFileDialog.getOpenFileName(self.parent, "PlusServer Executable",
-                                                           self.serverExecutable, "*.exe")
+                                                self.serverExecutable, "*.exe")
     if executable != "" and executable.find("PlusServer.exe"):
       self.serverExecutable = executable
       self.serverExecutableChooserButton.setText(executable)
@@ -234,6 +238,72 @@ class ProstateTRUSNavGuidelet(Guidelet):
     Guidelet.cleanup(self)
     logging.debug('cleanup')
 
+  def setupAdvancedPanel(self):
+    logging.debug('setupAdvancedPanel')
+
+    self.advancedCollapsibleButton.setProperty('collapsedHeight', 20)
+    self.advancedCollapsibleButton.text = "Settings"
+    self.sliceletPanelLayout.addWidget(self.advancedCollapsibleButton)
+
+    self.advancedLayout = qt.QFormLayout(self.advancedCollapsibleButton)
+    self.advancedLayout.setContentsMargins(12, 4, 4, 4)
+    self.advancedLayout.setSpacing(4)
+
+    # Layout selection combo box
+    self.viewSelectorComboBox = qt.QComboBox(self.advancedCollapsibleButton)
+    self.viewSelectorComboBox.addItem("Ultrasound")
+    self.viewSelectorComboBox.addItem("Ultrasound + 3D")
+    self.viewSelectorComboBox.addItem("Ultrasound + Dual 3D")
+    self.viewSelectorComboBox.addItem("3D")
+    self.viewSelectorComboBox.addItem("Dual 3D")
+    self.advancedLayout.addRow("Layout: ", self.viewSelectorComboBox)
+
+    self.viewUltrasound = 0
+    self.viewUltrasound3d = 1
+    self.viewUltrasoundDual3d = 2
+    self.view3d = 3
+    self.viewDual3d = 4
+
+    self.layoutManager = slicer.app.layoutManager()
+
+    self.registerCustomLayouts(self.layoutManager)
+
+    # Activate default view
+    self.onViewSelect(self.viewUltrasound3d)
+
+    # OpenIGTLink connector node selection
+    self.linkInputSelector = slicer.qMRMLNodeComboBox()
+    self.linkInputSelector.nodeTypes = ("vtkMRMLIGTLConnectorNode", "")
+    self.linkInputSelector.selectNodeUponCreation = True
+    self.linkInputSelector.addEnabled = False
+    self.linkInputSelector.removeEnabled = True
+    self.linkInputSelector.noneEnabled = False
+    self.linkInputSelector.showHidden = False
+    self.linkInputSelector.showChildNodeTypes = False
+    self.linkInputSelector.setMRMLScene( slicer.mrmlScene )
+    self.linkInputSelector.setToolTip( "Select connector node" )
+    self.advancedLayout.addRow("OpenIGTLink connector: ", self.linkInputSelector)
+
+    self.showFullSlicerInterfaceButton = qt.QPushButton()
+    self.showFullSlicerInterfaceButton.setText("Show full user interface")
+    setButtonStyle(self.showFullSlicerInterfaceButton)
+    #self.showFullSlicerInterfaceButton.setSizePolicy(self.sizePolicy)
+    self.advancedLayout.addRow(self.showFullSlicerInterfaceButton)
+
+    self.saveSceneButton = qt.QPushButton()
+    self.saveSceneButton.setText("Save slicelet scene")
+    setButtonStyle(self.saveSceneButton)
+    self.advancedLayout.addRow(self.saveSceneButton)
+
+    self.saveDirectoryLineEdit = qt.QLineEdit()
+    self.saveDirectoryLineEdit.setText(self.getSavedScenesDirectory())
+    saveLabel = qt.QLabel()
+    saveLabel.setText("Save scene directory:")
+    hbox = qt.QHBoxLayout()
+    hbox.addWidget(saveLabel)
+    hbox.addWidget(self.saveDirectoryLineEdit)
+    self.advancedLayout.addRow(hbox)
+
   def setupConnections(self):#find common connections, add specials in overridden method
     logging.debug('ProstateTRUSNav.setupConnections()')
     Guidelet.setupConnections(self)
@@ -284,19 +354,21 @@ class ProstateTRUSNavGuidelet(Guidelet):
 
     if len(volumeReconstructorDeviceIdsList) > 0:
       self.parameterNode.SetParameter("VolumeReconstructor", str(volumeReconstructorDeviceIdsList[0]))
-    # self.ultrasound.volumeReconstructorIDSelector.clear()
-    # self.ultrasound.volumeReconstructorIDSelector.addItems(volumeReconstructorDeviceIdsList)
 
 
 class ProstateTRUSNavUltrasound(UltraSound):
 
   SCOUT_VOLUME_FILENAME = "ScoutScan.mha"
+  LIVE_VOLUME_FILENAME = "LiveReconstructedVolume.mha"
+
   RECORDING_FILENAME = "Recording.mha"
   SCOUT_RECORDING_FILENAME = "ScoutScanRecording.mha"
   LIVE_RECORDING_FILENAME = "LiveRecording.mha"
+
   SCOUT_VOLUME_NODE_NAME = "ScoutScan"
   OFFLINE_VOLUME_NODE_NAME = "RecVol_Reference"
   LIVE_VOLUME_NODE_NAME = "liveReconstruction"
+
   APPLY_HOLE_FILLING_FOR_SNAPSHOT = False
   SNAPSHOT_INTERVAL = 1
   OUTPUT_VOLUME_SPACING = 3
@@ -336,10 +408,9 @@ class ProstateTRUSNavUltrasound(UltraSound):
     pass
 
   def setupPanel(self, parentWidget):
-
     logging.debug('UltraSound.setupPanel')
-    collapsibleButton = ctk.ctkCollapsibleButton()
 
+    collapsibleButton = ctk.ctkCollapsibleButton()
     collapsibleButton.setProperty('collapsedHeight', 20)
     setButtonStyle(collapsibleButton, 2.0)
     collapsibleButton.text = "Ultrasound"
@@ -388,19 +459,10 @@ class ProstateTRUSNavUltrasound(UltraSound):
     self.offlineReconstructButton.setToolTip("If clicked, reconstruct recorded volume")
     self.offlineReconstructButton.setSizePolicy(qt.QSizePolicy.Expanding, qt.QSizePolicy.Expanding)
 
-    offlineReconstructParametersLayout = qt.QGridLayout()
-
-    self.outputVolumeDeviceLabel = self.createLabel("Output Volume Device:", visible=False)
-    offlineReconstructParametersLayout.addWidget(self.outputVolumeDeviceLabel, 1, 0)
-
-    self.offlineVolumeToReconstructLabel = self.createLabel("Volume to Reconstruct:", visible=False)
-    offlineReconstructParametersLayout.addWidget(self.offlineVolumeToReconstructLabel, 2, 0)
-
     self.offlineVolumeToReconstructSelector = qt.QComboBox()
     self.offlineVolumeToReconstructSelector.setEditable(True)
     self.offlineVolumeToReconstructSelector.setToolTip( "Pick/set volume to reconstruct" )
     self.offlineVolumeToReconstructSelector.visible = False
-    offlineReconstructParametersLayout.addWidget(self.offlineVolumeToReconstructSelector, 2, 1)
 
     hbox = qt.QHBoxLayout()
     hbox.addWidget(self.startStopRecordingButton)
@@ -417,12 +479,6 @@ class ProstateTRUSNavUltrasound(UltraSound):
     self.startStopScoutScanButton.setEnabled(False)
     self.startStopScoutScanButton.setSizePolicy(qt.QSizePolicy.Expanding, qt.QSizePolicy.Expanding)
 
-    self.scoutScanFilenameLabel = self.createLabel("Recording filename:", visible=False)
-    self.scoutScanFilenameLabel.setSizePolicy(qt.QSizePolicy.Minimum, qt.QSizePolicy.Minimum)
-
-    self.scoutFilenameCompletionBox = qt.QCheckBox()
-    self.scoutFilenameCompletionBox.visible = False
-
     self.startStopLiveReconstructionButton = qt.QPushButton("  Start live reconstruction")
     self.startStopLiveReconstructionButton.setCheckable(True)
     self.startStopLiveReconstructionButton.setIcon(self.recordIcon)
@@ -435,63 +491,15 @@ class ProstateTRUSNavUltrasound(UltraSound):
     self.displayRoiButton.setIcon(self.visibleOffIcon)
     self.displayRoiButton.setToolTip("If clicked, display ROI")
 
-    liveReconstructionAdvancedParametersLayout = qt.QGridLayout()
-
-    self.liveOutputVolumeDeviceLabel = self.createLabel("Output volume device: ", visible=False)
-    liveReconstructionAdvancedParametersLayout.addWidget(self.liveOutputVolumeDeviceLabel, 0, 0)
-
-    self.liveVolumeToReconstructLabel = self.createLabel("Output filename:", visible=False)
-    liveReconstructionAdvancedParametersLayout.addWidget(self.liveVolumeToReconstructLabel, 1, 0)
-
-    self.liveVolumeToReconstructFilename = qt.QLineEdit()
-    self.liveVolumeToReconstructFilename.setText("LiveReconstructedVolume.mha")
-    self.liveVolumeToReconstructFilename.visible = False
-    self.liveVolumeToReconstructFilename.setToolTip( "Volume for live reconstruction" )
-    liveReconstructionAdvancedParametersLayout.addWidget(self.liveVolumeToReconstructFilename, 1, 1)
-
-    self.liveFilenameCompletionLabel = self.createLabel("Add timestamp to filename:", visible=False)
-    liveReconstructionAdvancedParametersLayout.addWidget(self.liveFilenameCompletionLabel, 2, 0)
-
-    self.liveFilenameCompletionBox = qt.QCheckBox()
-    self.liveFilenameCompletionBox.visible = False
-    liveReconstructionAdvancedParametersLayout.addWidget(self.liveFilenameCompletionBox, 2, 1)
-
-    liveReconstructionAdvancedParametersControlsLayout = qt.QGridLayout()
-
-    self.outputExtentLiveReconstructionLabel = self.createLabel("Extent:", visible=False)
-    liveReconstructionAdvancedParametersControlsLayout.addWidget(self.outputExtentLiveReconstructionLabel, 0, 0)
-
     hbox = qt.QHBoxLayout()
     hbox.addWidget(self.startStopScoutScanButton)
     hbox.addWidget(self.startStopLiveReconstructionButton)
     ultrasoundLayout.addRow(hbox)
 
-    self.outputExtentROIBoxDirection1 = qt.QDoubleSpinBox()
-    self.outputExtentROIBoxDirection1.setToolTip( "Display output extent (use ROI to modify it)" )
-    self.outputExtentROIBoxDirection1.setReadOnly(True)
-    self.outputExtentROIBoxDirection1.setRange(0,800)
-    self.outputExtentROIBoxDirection1.visible = False
-    liveReconstructionAdvancedParametersControlsLayout.addWidget(self.outputExtentROIBoxDirection1, 0, 1)
-
-    self.outputExtentROIBoxDirection2 = qt.QDoubleSpinBox()
-    self.outputExtentROIBoxDirection2.setToolTip( "Display output extent (use ROI to modify it)" )
-    self.outputExtentROIBoxDirection2.setReadOnly(True)
-    self.outputExtentROIBoxDirection2.setRange(0,800)
-    self.outputExtentROIBoxDirection2.visible = False
-    liveReconstructionAdvancedParametersControlsLayout.addWidget(self.outputExtentROIBoxDirection2, 0, 2)
-
-    self.outputExtentROIBoxDirection3 = qt.QDoubleSpinBox()
-    self.outputExtentROIBoxDirection3.setToolTip( "Display output extent (use ROI to modify it)" )
-    self.outputExtentROIBoxDirection3.setReadOnly(True)
-    self.outputExtentROIBoxDirection3.setRange(0,800)
-    self.outputExtentROIBoxDirection3.visible = False
-    liveReconstructionAdvancedParametersControlsLayout.addWidget(self.outputExtentROIBoxDirection3, 0, 3)
-
     self.snapshotTimer = qt.QTimer()
     self.snapshotTimer.setSingleShot(True)
 
     self.onConnectorNodeSelected()
-    # self.createDefaultParameterSet()
     self.onParameterSetSelected()
 
     return collapsibleButton
@@ -508,48 +516,16 @@ class ProstateTRUSNavUltrasound(UltraSound):
     self.linkInputSelector.setMRMLScene(slicer.mrmlScene)
     self.linkInputSelector.setToolTip("Select connector node")
 
-  def setupScene(self):
+  def setupResliceDriver(self):
     layoutManager = slicer.app.layoutManager()
-
-    # live ultrasound
-    liveUltrasoundNodeName = self.guideletParent.parameterNode.GetParameter('LiveUltrasoundNodeName')
-    self.liveUltrasoundNode_Reference = slicer.util.getNode(liveUltrasoundNodeName)
-    if not self.liveUltrasoundNode_Reference:
-      imageSize=[800, 600, 1]
-      imageSpacing=[0.2, 0.2, 0.2]
-      # Create an empty image volume
-      imageData=vtk.vtkImageData()
-      imageData.SetDimensions(imageSize)
-      imageData.AllocateScalars(vtk.VTK_UNSIGNED_CHAR, 1)
-      thresholder=vtk.vtkImageThreshold()
-      thresholder.SetInputData(imageData)
-      thresholder.SetInValue(0)
-      thresholder.SetOutValue(0)
-      # Create volume node
-      self.liveUltrasoundNode_Reference=slicer.vtkMRMLScalarVolumeNode()
-      self.liveUltrasoundNode_Reference.SetName(liveUltrasoundNodeName)
-      self.liveUltrasoundNode_Reference.SetSpacing(imageSpacing)
-      self.liveUltrasoundNode_Reference.SetImageDataConnection(thresholder.GetOutputPort())
-      # Add volume to scene
-      slicer.mrmlScene.AddNode(self.liveUltrasoundNode_Reference)
-      displayNode=slicer.vtkMRMLScalarVolumeDisplayNode()
-      slicer.mrmlScene.AddNode(displayNode)
-      colorNode = slicer.util.getNode('Grey')
-      displayNode.SetAndObserveColorNodeID(colorNode.GetID())
-      self.liveUltrasoundNode_Reference.SetAndObserveDisplayNodeID(displayNode.GetID())
-      #self.liveUltrasoundNode_Reference.CreateDefaultStorageNode()
-
     # Show ultrasound in red view.
     redSlice = layoutManager.sliceWidget('Red')
     redSliceLogic = redSlice.sliceLogic()
     redSliceLogic.GetSliceCompositeNode().SetBackgroundVolumeID(self.liveUltrasoundNode_Reference.GetID())
 
-    # Set up volume reslice driver.
     resliceLogic = slicer.modules.volumereslicedriver.logic()
     if resliceLogic:
       redNode = slicer.util.getNode('vtkMRMLSliceNodeRed')
-      # Typically the image is zoomed in, therefore it is faster if the original resolution is used
-      # on the 3D slice (and also we can show the full image and not the shape and size of the 2D view)
       redNode.SetSliceResolutionMode(slicer.vtkMRMLSliceNode.SliceResolutionMatchVolumes)
       resliceLogic.SetDriverForSlice(self.liveUltrasoundNode_Reference.GetID(), redNode)
       resliceLogic.SetModeForSlice(6, redNode) # Transverse mode, default for PLUS ultrasound.
@@ -579,12 +555,7 @@ class ProstateTRUSNavUltrasound(UltraSound):
     self.captureIDSelector.connect('currentIndexChanged(QString)', self.updateParameterNodeFromGui)
     self.volumeReconstructorIDSelector.connect('currentIndexChanged(QString)', self.updateParameterNodeFromGui)
     self.offlineVolumeToReconstructSelector.connect('currentIndexChanged(int)', self.updateParameterNodeFromGui)
-    self.scoutFilenameCompletionBox.connect('clicked(bool)', self.updateParameterNodeFromGui)
     self.displayRoiButton.connect('clicked(bool)', self.updateParameterNodeFromGui)
-    self.outputExtentROIBoxDirection1.connect('valueChanged(double)', self.updateParameterNodeFromGui)
-    self.outputExtentROIBoxDirection2.connect('valueChanged(double)', self.updateParameterNodeFromGui)
-    self.outputExtentROIBoxDirection3.connect('valueChanged(double)', self.updateParameterNodeFromGui)
-    self.liveFilenameCompletionBox.connect('clicked(bool)', self.updateParameterNodeFromGui)
     self.snapshotTimer.timeout.connect(self.onRequestVolumeReconstructionSnapshot)
     self.connectDisconnectButton.connect('clicked(bool)', self.onConnectDisconnectButtonClicked)
 
@@ -599,12 +570,7 @@ class ProstateTRUSNavUltrasound(UltraSound):
     self.captureIDSelector.disconnect('currentIndexChanged(QString)', self.updateParameterNodeFromGui)
     self.volumeReconstructorIDSelector.disconnect('currentIndexChanged(QString)', self.updateParameterNodeFromGui)
     self.offlineVolumeToReconstructSelector.disconnect('currentIndexChanged(int)', self.updateParameterNodeFromGui)
-    self.scoutFilenameCompletionBox.disconnect('clicked(bool)', self.updateParameterNodeFromGui)
     self.displayRoiButton.disconnect('clicked(bool)', self.updateParameterNodeFromGui)
-    self.outputExtentROIBoxDirection1.disconnect('valueChanged(double)', self.updateParameterNodeFromGui)
-    self.outputExtentROIBoxDirection2.disconnect('valueChanged(double)', self.updateParameterNodeFromGui)
-    self.outputExtentROIBoxDirection3.disconnect('valueChanged(double)', self.updateParameterNodeFromGui)
-    self.liveFilenameCompletionBox.disconnect('clicked(bool)', self.updateParameterNodeFromGui)
     self.snapshotTimer.timeout.disconnect(self.onRequestVolumeReconstructionSnapshot)
     self.connectDisconnectButton.disconnect('clicked(bool)', self.onConnectDisconnectButtonClicked)
 
@@ -627,19 +593,8 @@ class ProstateTRUSNavUltrasound(UltraSound):
     self.updateGuiFromParameterNode()
 
   def updateGuiFromParameterNode(self):
-    self.parameterValueList = {'RoiExtent1': self.outputExtentROIBoxDirection1,
-                               'RoiExtent2': self.outputExtentROIBoxDirection2,
-                               'RoiExtent3': self.outputExtentROIBoxDirection3}
-    for parameter in self.parameterValueList:
-      if self.parameterNode.GetParameter(parameter):
-        #Block Signal to avoid call of updateParameterNodeFromGui when parameter is set programmatically - we only want to catch when user change values
-        self.parameterValueList[parameter].blockSignals(True)
-        self.parameterValueList[parameter].setValue(float(self.parameterNode.GetParameter(parameter)))
-      self.parameterValueList[parameter].blockSignals(False)
 
-    self.parameterCheckBoxList = {'RoiDisplay': self.displayRoiButton,
-                                  'ScoutFilenameCompletion': self.scoutFilenameCompletionBox,
-                                  'LiveFilenameCompletion': self.liveFilenameCompletionBox}
+    self.parameterCheckBoxList = {'RoiDisplay': self.displayRoiButton}
     for parameter in self.parameterCheckBoxList:
       if self.parameterNode.GetParameter(parameter):
         self.parameterCheckBoxList[parameter].blockSignals(True)
@@ -654,7 +609,6 @@ class ProstateTRUSNavUltrasound(UltraSound):
     for parameter in self.parameterVolumeList:
       if self.parameterNode.GetParameter(parameter):
         self.parameterVolumeList[parameter].blockSignals(True)
-        # self.parameterVolumeList[parameter].setCurrentIndex(int(self.parameterNode.GetParameter(parameter)))
       self.parameterVolumeList[parameter].blockSignals(False)
 
     self.parameterNodesList = {'OpenIGTLinkConnector': self.linkInputSelector}
@@ -690,12 +644,7 @@ class ProstateTRUSNavUltrasound(UltraSound):
                            'VolumeReconstructor': self.volumeReconstructorIDSelector.currentText,
                            'VolumeReconstructorIndex': self.volumeReconstructorIDSelector.currentIndex,
                            'RoiDisplay': self.displayRoiButton.isChecked(),
-                           'RoiExtent1': self.outputExtentROIBoxDirection1.value,
-                           'RoiExtent2': self.outputExtentROIBoxDirection2.value,
-                           'RoiExtent3': self.outputExtentROIBoxDirection3.value,
-                           'OfflineVolumeToReconstruct': self.offlineVolumeToReconstructSelector.currentIndex,
-                           'ScoutFilenameCompletion': self.scoutFilenameCompletionBox.isChecked(),
-                           'LiveFilenameCompletion': self.liveFilenameCompletionBox.isChecked()}
+                           'OfflineVolumeToReconstruct': self.offlineVolumeToReconstructSelector.currentIndex}
     for parameter in self.parametersList:
       self.parameterNode.SetParameter(parameter, str(self.parametersList[parameter]))
     if self.roiNode:
@@ -838,7 +787,7 @@ class ProstateTRUSNavUltrasound(UltraSound):
     return self.plusRemoteLogic.addTimestampToFilename(self.LIVE_RECORDING_FILENAME)
 
   def getLiveReconstructionOutputFilename(self):
-    return self.plusRemoteLogic.addTimestampToFilename(self.liveVolumeToReconstructFilename.text)
+    return self.plusRemoteLogic.addTimestampToFilename(self.LIVE_VOLUME_FILENAME)
 
 #
 # Commands
@@ -889,7 +838,7 @@ class ProstateTRUSNavUltrasound(UltraSound):
   def onRequestVolumeReconstructionSnapshot(self, stopFlag = ""):
     self.plusRemoteLogic.getVolumeReconstructionSnapshot(self.linkInputSelector.currentNode().GetID(),
                                                          self.volumeReconstructorIDSelector.currentText,
-                                                         self.liveVolumeToReconstructFilename.text,
+                                                         self.LIVE_VOLUME_FILENAME,
                                                          self.LIVE_VOLUME_NODE_NAME,
                                                          self.APPLY_HOLE_FILLING_FOR_SNAPSHOT, self.onSnapshotAcquired)
 
@@ -1017,7 +966,6 @@ class ProstateTRUSNavUltrasound(UltraSound):
     applicationLogic = slicer.app.applicationLogic()
     applicationLogic.FitSliceToAll()
 
-    #3D view
     self.guideletParent.showVolumeRendering(scoutScanVolumeNode)
 
   def onSnapshotAcquired(self, command, q):
@@ -1052,10 +1000,6 @@ class ProstateTRUSNavUltrasound(UltraSound):
 
   def onVolumeLiveReconstructedFinalize(self):
     self.guideletParent.showVolumeRendering(self.getLiveVolumeRecNode())
-
-#
-# ROI initialization and update
-#
 
   def onRoiInitialization(self):
     reconstructedNode = slicer.mrmlScene.GetNodesByName(self.SCOUT_VOLUME_NODE_NAME)
@@ -1102,7 +1046,3 @@ class ProstateTRUSNavUltrasound(UltraSound):
     self.liveOutputSpacingValue = [self.LIVE_OUTPUT_VOLUME_SPACING,
                                    self.LIVE_OUTPUT_VOLUME_SPACING,
                                    self.LIVE_OUTPUT_VOLUME_SPACING]
-
-    self.outputExtentROIBoxDirection1.value = self.outputExtentValue[1]
-    self.outputExtentROIBoxDirection2.value = self.outputExtentValue[3]
-    self.outputExtentROIBoxDirection3.value = self.outputExtentValue[5]
