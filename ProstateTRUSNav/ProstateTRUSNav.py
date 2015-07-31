@@ -144,25 +144,6 @@ class ProstateTRUSNavLogic(GuideletLogic):
   def __init__(self, parent = None):
     GuideletLogic.__init__(self, parent)
 
-  def createParameterNode(self):
-    node = GuideletLogic.createParameterNode(self)
-    parameterList = {'RecordingFilenamePrefix': "ProstateTRUSNavRecording-",
-                     'RecordingFilenameExtension': ".mhd",
-                     'DefaultSavedScenesPath': os.path.dirname(slicer.modules.prostatetrusnav.path)+'/SavedScenes',
-                     'PivotCalibrationErrorThresholdMm':  0.9,
-                     'PivotCalibrationDurationSec': 5,
-                     'EnableBreachWarningLight':'True',
-                     'BreachWarningLightMarginSizeMm':2.0,
-                     'TestMode':'False',
-                     }
-
-    for parameter in parameterList:
-      if not node.GetParameter(parameter):
-        node.SetParameter(parameter, str(parameterList[parameter]))
-
-    return node
-	
-
 class ProstateTRUSNavTest(GuideletTest):
   """This is the test case for your scripted module.
   """
@@ -238,71 +219,6 @@ class ProstateTRUSNavGuidelet(Guidelet):
     Guidelet.cleanup(self)
     logging.debug('cleanup')
 
-  def setupAdvancedPanel(self):
-    logging.debug('setupAdvancedPanel')
-
-    self.advancedCollapsibleButton.setProperty('collapsedHeight', 20)
-    self.advancedCollapsibleButton.text = "Settings"
-    self.sliceletPanelLayout.addWidget(self.advancedCollapsibleButton)
-
-    self.advancedLayout = qt.QFormLayout(self.advancedCollapsibleButton)
-    self.advancedLayout.setContentsMargins(12, 4, 4, 4)
-    self.advancedLayout.setSpacing(4)
-
-    # Layout selection combo box
-    self.viewSelectorComboBox = qt.QComboBox(self.advancedCollapsibleButton)
-    self.viewSelectorComboBox.addItem("Ultrasound")
-    self.viewSelectorComboBox.addItem("Ultrasound + 3D")
-    self.viewSelectorComboBox.addItem("Ultrasound + Dual 3D")
-    self.viewSelectorComboBox.addItem("3D")
-    self.viewSelectorComboBox.addItem("Dual 3D")
-    self.advancedLayout.addRow("Layout: ", self.viewSelectorComboBox)
-
-    self.viewUltrasound = 0
-    self.viewUltrasound3d = 1
-    self.viewUltrasoundDual3d = 2
-    self.view3d = 3
-    self.viewDual3d = 4
-
-    self.layoutManager = slicer.app.layoutManager()
-
-    self.registerCustomLayouts(self.layoutManager)
-
-    # Activate default view
-    self.onViewSelect(self.viewUltrasound3d)
-
-    # OpenIGTLink connector node selection
-    self.linkInputSelector = slicer.qMRMLNodeComboBox()
-    self.linkInputSelector.nodeTypes = ("vtkMRMLIGTLConnectorNode", "")
-    self.linkInputSelector.selectNodeUponCreation = True
-    self.linkInputSelector.addEnabled = False
-    self.linkInputSelector.removeEnabled = True
-    self.linkInputSelector.noneEnabled = False
-    self.linkInputSelector.showHidden = False
-    self.linkInputSelector.showChildNodeTypes = False
-    self.linkInputSelector.setMRMLScene( slicer.mrmlScene )
-    self.linkInputSelector.setToolTip( "Select connector node" )
-    self.advancedLayout.addRow("OpenIGTLink connector: ", self.linkInputSelector)
-
-    self.showFullSlicerInterfaceButton = qt.QPushButton()
-    self.showFullSlicerInterfaceButton.setText("Show full user interface")
-    setButtonStyle(self.showFullSlicerInterfaceButton)
-    #self.showFullSlicerInterfaceButton.setSizePolicy(self.sizePolicy)
-    self.advancedLayout.addRow(self.showFullSlicerInterfaceButton)
-
-    self.saveSceneButton = qt.QPushButton()
-    self.saveSceneButton.setText("Save slicelet scene")
-    setButtonStyle(self.saveSceneButton)
-    self.advancedLayout.addRow(self.saveSceneButton)
-
-    self.saveDirectoryLineEdit = qt.QLineEdit()
-    self.saveDirectoryLineEdit.setText(self.getSavedScenesDirectory())
-    saveLabel = qt.QLabel()
-    saveLabel.setText("Save scene directory:")
-    hbox = qt.QHBoxLayout()
-    hbox.addWidget(saveLabel)
-    hbox.addWidget(self.saveDirectoryLineEdit)
-    self.advancedLayout.addRow(hbox)
 
   def setupConnections(self):#find common connections, add specials in overridden method
     logging.debug('ProstateTRUSNav.setupConnections()')
@@ -333,14 +249,6 @@ class ProstateTRUSNavGuidelet(Guidelet):
   def showDefaultView(self):
     self.onViewSelect(self.viewUltrasound3d)
 
-  def onConnectorNodeConnected(self, caller, event, force=False):
-    Guidelet.onConnectorNodeConnected(self, caller, event, force)
-    # setting Red light icon
-
-  def onConnectorNodeDisconnected(self, caller, event, force=False):
-    Guidelet.onConnectorNodeDisconnected(self, caller, event, force)
-    # set Green light icon
-
   def onGetVolumeReconstructorDeviceCommandResponseReceived(self, command, q):
 
     if command.GetStatus() != command.CommandSuccess:
@@ -358,6 +266,7 @@ class ProstateTRUSNavGuidelet(Guidelet):
 
 class ProstateTRUSNavUltrasound(UltraSound):
 
+  OFFLINE_VOLUME_FILENAME = "RecVol_Reference.mha"
   SCOUT_VOLUME_FILENAME = "ScoutScan.mha"
   LIVE_VOLUME_FILENAME = "LiveReconstructedVolume.mha"
 
@@ -386,29 +295,25 @@ class ProstateTRUSNavUltrasound(UltraSound):
     else:
       self.startStopLiveReconstructionButton.setEnabled(False)
 
-
   def __init__(self, guideletParent):
     UltraSound.__init__(self, guideletParent)
 
     self.parameterNode = guideletParent.parameterNode
     self.parameterNodeObserver = None
-    self.connectorNode = None
-    self.connectorNodeObserverTagList = []
-    self.connectorNodeConnected = False
     self._roiNode = None
-    self.liveOutputSpacingValue = [1.0,1.0,1.0]
-    self.outputOriginValue = None
-    self.outputExtentValue = None
+    self.liveOutputSpacingValue = [self.LIVE_OUTPUT_VOLUME_SPACING, self.LIVE_OUTPUT_VOLUME_SPACING,
+                                   self.LIVE_OUTPUT_VOLUME_SPACING]
+    self.outputSpacing = [self.OUTPUT_VOLUME_SPACING, self.OUTPUT_VOLUME_SPACING, self.OUTPUT_VOLUME_SPACING]
+    self.roiOrigin = None
+    self.roiExtent = None
     self.defaultParameterNode = None
-
-  def enable(self):
-    pass
-
-  def disable(self):
-    pass
+    self.logic = ProstateTRUSNavUltrasoundLogic()
 
   def setupPanel(self, parentWidget):
-    logging.debug('UltraSound.setupPanel')
+    logging.debug('ProstateTRUSNavUltrasound.setupPanel')
+
+    self.connectorNode = self.guideletParent.connectorNode
+    self.connectorNodeConnected = False
 
     collapsibleButton = ctk.ctkCollapsibleButton()
     collapsibleButton.setProperty('collapsedHeight', 20)
@@ -420,12 +325,10 @@ class ProstateTRUSNavUltrasound(UltraSound):
     ultrasoundLayout.setContentsMargins(12,4,4,4)
     ultrasoundLayout.setSpacing(4)
 
-    self.createOpenIGTLinkSelector()
     self.connectDisconnectButton = qt.QPushButton("Connect")
     self.connectDisconnectButton.setToolTip("If clicked, connection OpenIGTLink")
 
     hbox = qt.QHBoxLayout()
-    hbox.addWidget(self.linkInputSelector)
     hbox.addWidget(self.connectDisconnectButton)
     ultrasoundLayout.addRow(hbox)
 
@@ -494,27 +397,15 @@ class ProstateTRUSNavUltrasound(UltraSound):
     hbox = qt.QHBoxLayout()
     hbox.addWidget(self.startStopScoutScanButton)
     hbox.addWidget(self.startStopLiveReconstructionButton)
+    # hbox.addWidget(self.displayRoiButton)
     ultrasoundLayout.addRow(hbox)
 
     self.snapshotTimer = qt.QTimer()
     self.snapshotTimer.setSingleShot(True)
 
-    self.onConnectorNodeSelected()
     self.onParameterSetSelected()
 
     return collapsibleButton
-
-  def createOpenIGTLinkSelector(self):
-    self.linkInputSelector = slicer.qMRMLNodeComboBox()
-    self.linkInputSelector.nodeTypes = ("vtkMRMLIGTLConnectorNode", "")
-    self.linkInputSelector.selectNodeUponCreation = True
-    self.linkInputSelector.addEnabled = False
-    self.linkInputSelector.removeEnabled = True
-    self.linkInputSelector.noneEnabled = False
-    self.linkInputSelector.showHidden = False
-    self.linkInputSelector.showChildNodeTypes = False
-    self.linkInputSelector.setMRMLScene(slicer.mrmlScene)
-    self.linkInputSelector.setToolTip("Select connector node")
 
   def setupResliceDriver(self):
     layoutManager = slicer.app.layoutManager()
@@ -545,13 +436,11 @@ class ProstateTRUSNavUltrasound(UltraSound):
     return label
 
   def setupConnections(self):
-    self.linkInputSelector.connect("nodeActivated(vtkMRMLNode*)", self.onConnectorNodeSelected)
     self.startStopRecordingButton.connect('clicked(bool)', self.onStartStopRecordingButtonClicked)
     self.offlineReconstructButton.connect('clicked(bool)', self.onReconstVolume)
     self.startStopScoutScanButton.connect('clicked(bool)', self.onStartStopScoutScanButtonClicked)
     self.startStopLiveReconstructionButton.connect('clicked(bool)', self.onStartStopLiveReconstructionButtonClicked)
     self.displayRoiButton.connect('clicked(bool)', self.onDisplayRoiButtonClicked)
-    self.linkInputSelector.connect('currentNodeIDChanged(QString)', self.updateParameterNodeFromGui)
     self.captureIDSelector.connect('currentIndexChanged(QString)', self.updateParameterNodeFromGui)
     self.volumeReconstructorIDSelector.connect('currentIndexChanged(QString)', self.updateParameterNodeFromGui)
     self.offlineVolumeToReconstructSelector.connect('currentIndexChanged(int)', self.updateParameterNodeFromGui)
@@ -560,13 +449,11 @@ class ProstateTRUSNavUltrasound(UltraSound):
     self.connectDisconnectButton.connect('clicked(bool)', self.onConnectDisconnectButtonClicked)
 
   def disconnect(self):
-    self.linkInputSelector.disconnect("nodeActivated(vtkMRMLNode*)", self.onConnectorNodeSelected)
     self.startStopRecordingButton.disconnect('clicked(bool)', self.onStartStopRecordingButtonClicked)
     self.offlineReconstructButton.disconnect('clicked(bool)', self.onReconstVolume)
     self.startStopScoutScanButton.disconnect('clicked(bool)', self.onStartStopScoutScanButtonClicked)
     self.startStopLiveReconstructionButton.disconnect('clicked(bool)', self.onStartStopLiveReconstructionButtonClicked)
     self.displayRoiButton.disconnect('clicked(bool)', self.onDisplayRoiButtonClicked)
-    self.linkInputSelector.disconnect('currentNodeIDChanged(QString)', self.updateParameterNodeFromGui)
     self.captureIDSelector.disconnect('currentIndexChanged(QString)', self.updateParameterNodeFromGui)
     self.volumeReconstructorIDSelector.disconnect('currentIndexChanged(QString)', self.updateParameterNodeFromGui)
     self.offlineVolumeToReconstructSelector.disconnect('currentIndexChanged(int)', self.updateParameterNodeFromGui)
@@ -583,10 +470,6 @@ class ProstateTRUSNavUltrasound(UltraSound):
     self.visibleOnIcon = qt.QIcon(":Icons\VisibleOn.png")
 
   def onParameterSetSelected(self):
-    if self.parameterNode and self.parameterNodeObserver:
-      self.parameterNode.RemoveObserver(self.parameterNodeObserver)
-      self.parameterNodeObserver = self.parameterNode.AddObserver('currentNodeChanged(vtkMRMLNode*)',
-                                                                  self.updateGuiFromParameterNode)
     # Set up default values for new nodes
     if self.parameterNode:
       self.plusRemoteLogic.setDefaultParameters(self.parameterNode)
@@ -594,29 +477,11 @@ class ProstateTRUSNavUltrasound(UltraSound):
 
   def updateGuiFromParameterNode(self):
 
-    self.parameterCheckBoxList = {'RoiDisplay': self.displayRoiButton}
-    for parameter in self.parameterCheckBoxList:
-      if self.parameterNode.GetParameter(parameter):
-        self.parameterCheckBoxList[parameter].blockSignals(True)
-        if self.parameterNode.GetParameter(parameter) == "True":
-          self.parameterCheckBoxList[parameter].setChecked(True)
-        else:
-          self.parameterCheckBoxList[parameter].setChecked(False)
-      self.parameterCheckBoxList[parameter].blockSignals(False)
-      self.onDisplayRoiButtonClicked()
-
     self.parameterVolumeList = {'OfflineVolumeToReconstruct': self.offlineVolumeToReconstructSelector}
     for parameter in self.parameterVolumeList:
       if self.parameterNode.GetParameter(parameter):
         self.parameterVolumeList[parameter].blockSignals(True)
       self.parameterVolumeList[parameter].blockSignals(False)
-
-    self.parameterNodesList = {'OpenIGTLinkConnector': self.linkInputSelector}
-    for parameter in self.parameterNodesList:
-      if self.parameterNode.GetParameter(parameter):
-        self.parameterNodesList[parameter].blockSignals(True)
-        self.parameterNodesList[parameter].setCurrentNodeID(self.parameterNode.GetParameter(parameter))
-      self.parameterNodesList[parameter].blockSignals(False)
 
     if self.parameterNode.GetParameter('CaptureID'):
       self.captureIDSelector.blockSignals(True)
@@ -638,12 +503,10 @@ class ProstateTRUSNavUltrasound(UltraSound):
     #Update parameter node value to save when user change value in the interface
     if not self.parameterNode:
       return
-    self.parametersList = {'OpenIGTLinkConnector': self.linkInputSelector.currentNodeID,
-                           'CaptureID': self.captureIDSelector.currentText,
+    self.parametersList = {'CaptureID': self.captureIDSelector.currentText,
                            'CaptureIdIndex': self.captureIDSelector.currentIndex,
                            'VolumeReconstructor': self.volumeReconstructorIDSelector.currentText,
                            'VolumeReconstructorIndex': self.volumeReconstructorIDSelector.currentIndex,
-                           'RoiDisplay': self.displayRoiButton.isChecked(),
                            'OfflineVolumeToReconstruct': self.offlineVolumeToReconstructSelector.currentIndex}
     for parameter in self.parametersList:
       self.parameterNode.SetParameter(parameter, str(self.parametersList[parameter]))
@@ -654,46 +517,20 @@ class ProstateTRUSNavUltrasound(UltraSound):
 #
 # Connector observation and actions
 #
-  def onConnectorNodeSelected(self):
-    if self.connectorNode and self.connectorNodeObserverTagList:
-      for tag in self.connectorNodeObserverTagList:
-        self.connectorNode.RemoveObserver(tag)
-      self.connectorNodeObserverTagList = []
 
-    self.connectorNode = self.linkInputSelector.currentNode()
-
-    if self.connectorNode:
-      if self.connectorNode.GetState() == slicer.vtkMRMLIGTLConnectorNode.STATE_CONNECTED:
-        self.onConnectorNodeConnected(None, None, True)
-      else:
-        self.onConnectorNodeDisconnected(None, None, True)
-
-      # Add observers for connect/disconnect events
-      events = [[slicer.vtkMRMLIGTLConnectorNode.ConnectedEvent, self.onConnectorNodeConnected],
-                [slicer.vtkMRMLIGTLConnectorNode.DisconnectedEvent, self.onConnectorNodeDisconnected]]
-      for tagEventHandler in events:
-        connectorNodeObserverTag = self.connectorNode.AddObserver(tagEventHandler[0], tagEventHandler[1])
-        self.connectorNodeObserverTagList.append(connectorNodeObserverTag)
-
-  def onConnectorNodeConnected(self, caller, event, force=False):
-    # Multiple notifications may be sent when connecting/disconnecting,
-    # so we just if we know about the state change already
-    if self.connectorNodeConnected and not force:
-        return
+  def onConnectorNodeConnected(self):
+    logging.debug("ProstateTrusUltrasound:onConnectorNodeConnected")
     self.connectorNodeConnected = True
     self.captureIDSelector.setDisabled(False)
     self.volumeReconstructorIDSelector.setDisabled(False)
-    self.plusRemoteLogic.getCaptureDeviceIds(self.linkInputSelector.currentNode().GetID(),
+    self.plusRemoteLogic.getCaptureDeviceIds(self.connectorNode.GetID(),
                                    self.onGetCaptureDeviceCommandResponseReceived)
-    self.plusRemoteLogic.getVolumeReconstructorDeviceIds(self.linkInputSelector.currentNode().GetID(),
+    self.plusRemoteLogic.getVolumeReconstructorDeviceIds(self.connectorNode.GetID(),
                                                self.onGetVolumeReconstructorDeviceCommandResponseReceived)
     self.connectDisconnectButton.setText("Disconnect")
 
-  def onConnectorNodeDisconnected(self, caller, event, force=False):
-    # Multiple notifications may be sent when connecting/disconnecting,
-    # so we just if we know about the state change already
-    if not self.connectorNodeConnected  and not force:
-        return
+  def onConnectorNodeDisconnected(self):
+    logging.debug("ProstateTrusUltrasound:onConnectorNodeDisconnected")
     self.connectorNodeConnected = False
     self.startStopRecordingButton.setEnabled(False)
     self.startStopScoutScanButton.setEnabled(False)
@@ -749,7 +586,8 @@ class ProstateTRUSNavUltrasound(UltraSound):
   def onStartStopLiveReconstructionButtonClicked(self):
     if self.startStopLiveReconstructionButton.isChecked():
       if self.roiNode:
-        self.updateVolumeExtentFromROI()
+        self.roiOrigin, self.roiExtent = self.logic.updateVolumeOriginAndExtentFromROI(self.LIVE_OUTPUT_VOLUME_SPACING,
+                                                                                       self.roiNode)
       self.startStopLiveReconstructionButton.setText("  Stop Live Reconstruction")
       self.startStopLiveReconstructionButton.setIcon(self.stopIcon)
       self.startStopLiveReconstructionButton.setToolTip( "If clicked, stop live reconstruction" )
@@ -793,50 +631,52 @@ class ProstateTRUSNavUltrasound(UltraSound):
 # Commands
 #
   def onStartRecording(self, filename):
-    self.plusRemoteLogic.startRecording(self.linkInputSelector.currentNode().GetID(), self.captureIDSelector.currentText,
-                              filename, self.printCommandResponse)
+    self.plusRemoteLogic.startRecording(self.connectorNode.GetID(), self.captureIDSelector.currentText,
+                                        filename, self.printCommandResponse)
 
   def onStopRecording(self, callback):
-    self.plusRemoteLogic.stopRecording(self.linkInputSelector.currentNode().GetID(), self.captureIDSelector.currentText,
-                             callback)
+    self.plusRemoteLogic.stopRecording(self.connectorNode.GetID(), self.captureIDSelector.currentText, callback)
 
   def onStartReconstruction(self):
     if self.roiNode:
-      self.updateVolumeExtentFromROI()
-    self.plusRemoteLogic.startVolumeReconstuction(self.linkInputSelector.currentNode().GetID(),
-                                         self.volumeReconstructorIDSelector.currentText,
-                                         self.liveOutputSpacingValue, self.outputOriginValue,
-                                         self.outputExtentValue, self.printCommandResponse,
-                                         self.getLiveReconstructionOutputFilename(), self.LIVE_VOLUME_NODE_NAME)
+      self.roiOrigin, self.roiExtent = self.logic.updateVolumeOriginAndExtentFromROI(self.LIVE_OUTPUT_VOLUME_SPACING,
+                                                                                     self.roiNode)
+    self.plusRemoteLogic.startVolumeReconstuction(self.connectorNode.GetID(),
+                                                   self.volumeReconstructorIDSelector.currentText,
+                                                   self.liveOutputSpacingValue, self.roiOrigin,
+                                                   self.roiExtent, self.printCommandResponse,
+                                                   self.getLiveReconstructionOutputFilename(), self.LIVE_VOLUME_NODE_NAME)
     # Set up timer for requesting snapshot
     self.snapshotTimer.start(self.SNAPSHOT_INTERVAL*1000)
 
   def onStopReconstruction(self):
     self.snapshotTimer.stop()
-    self.plusRemoteLogic.stopVolumeReconstruction(self.linkInputSelector.currentNode().GetID(),
-                                        self.volumeReconstructorIDSelector.currentText, self.onVolumeLiveReconstructed,
-                                        self.getLiveReconstructionOutputFilename(), self.LIVE_VOLUME_NODE_NAME)
+    self.plusRemoteLogic.stopVolumeReconstruction(self.connectorNode.GetID(),
+                                                  self.volumeReconstructorIDSelector.currentText,
+                                                  self.onVolumeLiveReconstructed,
+                                                  self.getLiveReconstructionOutputFilename(),
+                                                  self.LIVE_VOLUME_NODE_NAME)
 
   def onReconstVolume(self):
     self.offlineReconstructButton.setIcon(self.waitIcon)
     self.offlineReconstructButton.setText("  Offline Reconstruction in progress ...")
     self.offlineReconstructButton.setEnabled(False)
-    outputSpacing = [self.OUTPUT_VOLUME_SPACING, self.OUTPUT_VOLUME_SPACING, self.OUTPUT_VOLUME_SPACING]
-    self.plusRemoteLogic.reconstructRecorded(self.linkInputSelector.currentNode().GetID(), self.volumeReconstructorIDSelector.currentText,
-                                   self.offlineVolumeToReconstructSelector.currentText, outputSpacing, self.onVolumeReconstructed,
-                                   "RecVol_Reference.mha", self.OFFLINE_VOLUME_NODE_NAME)
+    self.plusRemoteLogic.reconstructRecorded(self.connectorNode.GetID(), self.volumeReconstructorIDSelector.currentText,
+                                             self.offlineVolumeToReconstructSelector.currentText, self.outputSpacing,
+                                             self.onVolumeReconstructed, self.OFFLINE_VOLUME_FILENAME,
+                                             self.OFFLINE_VOLUME_NODE_NAME)
 
   def onScoutScanReconstVolume(self):
     self.startStopScoutScanButton.setIcon(self.waitIcon)
     self.startStopScoutScanButton.setText("  Scout Scan\n  Reconstruction in progress ...")
     self.startStopScoutScanButton.setEnabled(False)
-    outputSpacing = [self.OUTPUT_VOLUME_SPACING, self.OUTPUT_VOLUME_SPACING, self.OUTPUT_VOLUME_SPACING]
-    self.plusRemoteLogic.reconstructRecorded(self.linkInputSelector.currentNode().GetID(), self.volumeReconstructorIDSelector.currentText,
-                                             self.lastScoutRecordingOutputFilename, outputSpacing, self.onScoutVolumeReconstructed,
-                                             self.SCOUT_VOLUME_FILENAME, self.SCOUT_VOLUME_NODE_NAME)
+    self.plusRemoteLogic.reconstructRecorded(self.connectorNode.GetID(), self.volumeReconstructorIDSelector.currentText,
+                                             self.lastScoutRecordingOutputFilename, self.outputSpacing,
+                                             self.onScoutVolumeReconstructed, self.SCOUT_VOLUME_FILENAME,
+                                             self.SCOUT_VOLUME_NODE_NAME)
 
   def onRequestVolumeReconstructionSnapshot(self, stopFlag = ""):
-    self.plusRemoteLogic.getVolumeReconstructionSnapshot(self.linkInputSelector.currentNode().GetID(),
+    self.plusRemoteLogic.getVolumeReconstructionSnapshot(self.connectorNode.GetID(),
                                                          self.volumeReconstructorIDSelector.currentText,
                                                          self.LIVE_VOLUME_FILENAME,
                                                          self.LIVE_VOLUME_NODE_NAME,
@@ -846,12 +686,13 @@ class ProstateTRUSNavUltrasound(UltraSound):
 # Functions associated to commands
 #
   def printCommandResponse(self, command, q):
-    statusText = "Command {0} [{1}]: {2}\n".format(command.GetCommandName(), command.GetID(), command.StatusToString(command.GetStatus()))
+    statusText = "Command {0} [{1}]: {2}\n".format(command.GetCommandName(), command.GetID(),
+                                                   command.StatusToString(command.GetStatus()))
     if command.GetResponseMessage():
       statusText = statusText + command.GetResponseMessage()
     elif command.GetResponseText():
       statusText = statusText + command.GetResponseText()
-    print statusText
+    logging.debug(statusText)
 
   def onGetCaptureDeviceCommandResponseReceived(self, command, q):
     self.printCommandResponse(command, q)
@@ -900,7 +741,7 @@ class ProstateTRUSNavUltrasound(UltraSound):
     self.offlineReconstructButton.setEnabled(True)
 
     if command.GetStatus() == command.CommandExpired:
-      print "Scout Volume Recording: Timeout while waiting for volume reconstruction result"
+      logging.fatal("Scout Volume Recording: Timeout while waiting for volume reconstruction result")
       return
 
     if command.GetStatus() == command.CommandSuccess:
@@ -917,11 +758,11 @@ class ProstateTRUSNavUltrasound(UltraSound):
 
     if command.GetStatus() == command.CommandExpired:
       # volume reconstruction command timed out
-      print "Volume Reconstruction: Timeout while waiting for volume reconstruction result"
+      logging.fatal("Volume Reconstruction: Timeout while waiting for volume reconstruction result")
       return
 
     if command.GetStatus() != command.CommandSuccess:
-      print "Volume Reconstruction: " + command.GetResponseMessage()
+      logging.debug("Volume Reconstruction: " + command.GetResponseMessage())
       return
 
     qt.QTimer.singleShot(100, self.onVolumeReconstructedFinalize)
@@ -935,7 +776,7 @@ class ProstateTRUSNavUltrasound(UltraSound):
     self.printCommandResponse(command,q)
 
     if command.GetStatus() == command.CommandExpired:
-      print "Scout Volume Reconstruction: Timeout while waiting for scout volume reconstruction result"
+      logging.fatal("Scout Volume Reconstruction: Timeout while waiting for scout volume reconstruction result")
       return
 
     self.startStopScoutScanButton.setIcon(self.recordIcon)
@@ -943,7 +784,7 @@ class ProstateTRUSNavUltrasound(UltraSound):
     self.startStopScoutScanButton.setEnabled(True)
 
     if command.GetStatus() != command.CommandSuccess:
-      print "Scout Volume Reconstruction: " + command.GetResponseMessage()
+      logging.debug("Scout Volume Reconstruction: " + command.GetResponseMessage())
       return
 
     scoutScanReconstructFileName = os.path.basename(command.GetResponseMessage())
@@ -953,15 +794,12 @@ class ProstateTRUSNavUltrasound(UltraSound):
     qt.QTimer.singleShot(100, self.onScoutVolumeReconstructedFinalize)
 
   def onScoutVolumeReconstructedFinalize(self):
-    #Create and initialize ROI after scout scan because low resolution scout scan is used to set a smaller ROI for the live high resolution reconstruction
-    self.onRoiInitialization()
-
-    # if self.showScoutReconstructionResultOnCompletionCheckBox.isChecked():
+    # Create and initialize ROI after scout scan because low resolution scout scan is used to set
+    # a smaller ROI for the live high resolution reconstruction
+    self.roiNode = self.logic.onRoiInitialization(self.SCOUT_VOLUME_NODE_NAME, self.roiNode)
+    self.roiOrigin, self.roiExtent = self.logic.updateVolumeOriginAndExtentFromROI(self.LIVE_OUTPUT_VOLUME_SPACING,
+                                                                                   self.roiNode)
     scoutScanVolumeNode = self.getScoutVolumeNode()
-
-    scoutVolumeDisplay = scoutScanVolumeNode.GetDisplayNode()
-    self.scoutWindow = scoutVolumeDisplay.GetWindow()
-    self.scoutLevel = scoutVolumeDisplay.GetLevel()
 
     applicationLogic = slicer.app.applicationLogic()
     applicationLogic.FitSliceToAll()
@@ -987,11 +825,11 @@ class ProstateTRUSNavUltrasound(UltraSound):
     self.printCommandResponse(command,q)
 
     if command.GetStatus() == command.CommandExpired:
-      print "LIVE Volume Reconstruction: Failed to stop volume reconstruction"
+      logging.fatal("LIVE Volume Reconstruction: Failed to stop volume reconstruction")
       return
 
     if command.GetStatus() != command.CommandSuccess:
-      print "LIVE Volume Reconstruction " + command.GetResponseMessage()
+      logging.debug("LIVE Volume Reconstruction " + command.GetResponseMessage())
       return
 
     # Order of OpenIGTLink message receiving and processing is not guaranteed to be the same
@@ -1001,13 +839,22 @@ class ProstateTRUSNavUltrasound(UltraSound):
   def onVolumeLiveReconstructedFinalize(self):
     self.guideletParent.showVolumeRendering(self.getLiveVolumeRecNode())
 
-  def onRoiInitialization(self):
-    reconstructedNode = slicer.mrmlScene.GetNodesByName(self.SCOUT_VOLUME_NODE_NAME)
+
+class ProstateTRUSNavUltrasoundLogic(object):
+
+  def __init__(self):
+    pass
+
+  def onRoiInitialization(self, scoutVolumeNodeName, roiNode):
+    reconstructedNode = slicer.mrmlScene.GetNodesByName(scoutVolumeNodeName)
     reconstructedVolumeNode = slicer.vtkMRMLScalarVolumeNode.SafeDownCast(reconstructedNode.GetItemAsObject(0))
 
-    roiCenterInit = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-    roiRadiusInit = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-    bounds = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    roiCenterInit = [0.0, 0.0, 0.0,
+                     0.0, 0.0, 0.0]
+    roiRadiusInit = [0.0, 0.0, 0.0,
+                     0.0, 0.0, 0.0]
+    bounds = [0.0, 0.0, 0.0,
+              0.0, 0.0, 0.0]
 
     #ROI is initialized to fit scout scan reconstructed volume
     if reconstructedVolumeNode:
@@ -1015,34 +862,31 @@ class ProstateTRUSNavUltrasound(UltraSound):
       for i in range(0,5,2):
         roiCenterInit[i] = (bounds[i+1] + bounds[i])/2
         roiRadiusInit[i] = (bounds[i+1] - bounds[i])/2
-      if self.roiNode:
-        self.roiNode.SetXYZ(roiCenterInit[0], roiCenterInit[2], roiCenterInit[4])
-        self.roiNode.SetRadiusXYZ(roiRadiusInit[0], roiRadiusInit[2], roiRadiusInit[4])
+      if roiNode:
+        roiNode.SetXYZ(roiCenterInit[0], roiCenterInit[2], roiCenterInit[4])
+        roiNode.SetRadiusXYZ(roiRadiusInit[0], roiRadiusInit[2], roiRadiusInit[4])
       else:
-        self.roiNode = slicer.vtkMRMLAnnotationROINode()
-        self.roiNode.SetXYZ(roiCenterInit[0], roiCenterInit[2], roiCenterInit[4])
-        self.roiNode.SetRadiusXYZ(roiRadiusInit[0], roiRadiusInit[2], roiRadiusInit[4])
-        self.roiNode.Initialize(slicer.mrmlScene)
-        self.roiNode.SetDisplayVisibility(0)
-        self.roiNode.SetInteractiveMode(1)
-    self.updateVolumeExtentFromROI()
+        roiNode = slicer.vtkMRMLAnnotationROINode()
+        roiNode.SetXYZ(roiCenterInit[0], roiCenterInit[2], roiCenterInit[4])
+        roiNode.SetRadiusXYZ(roiRadiusInit[0], roiRadiusInit[2], roiRadiusInit[4])
+        roiNode.Initialize(slicer.mrmlScene)
+        roiNode.SetDisplayVisibility(0)
+        roiNode.SetInteractiveMode(1)
+    return roiNode
 
-  def updateVolumeExtentFromROI(self):
+  def updateVolumeOriginAndExtentFromROI(self, volumeSpacing, roiNode=None):
     #Update volume extent values each time user modifies the ROI, as we want volume to fit ROI for live reconstruction
     roiCenter = [0.0, 0.0, 0.0]
     roiRadius = [0.0, 0.0, 0.0]
     roiOrigin = [0.0, 0.0, 0.0]
-    if self.roiNode:
-      self.roiNode.GetXYZ(roiCenter)
-      self.roiNode.GetRadiusXYZ(roiRadius)
+    if roiNode:
+      roiNode.GetXYZ(roiCenter)
+      roiNode.GetRadiusXYZ(roiRadius)
 
     for i in range(0,len(roiCenter)):
         roiOrigin[i] = roiCenter[i] - roiRadius[i]
-    self.outputOriginValue = roiOrigin
     #Radius in mm, extent in pixel
-    self.outputExtentValue = [0, int((2*roiRadius[0])/self.LIVE_OUTPUT_VOLUME_SPACING), 0,
-                              int((2*roiRadius[1])/self.LIVE_OUTPUT_VOLUME_SPACING), 0,
-                              int((2*roiRadius[2])/self.LIVE_OUTPUT_VOLUME_SPACING)]
-    self.liveOutputSpacingValue = [self.LIVE_OUTPUT_VOLUME_SPACING,
-                                   self.LIVE_OUTPUT_VOLUME_SPACING,
-                                   self.LIVE_OUTPUT_VOLUME_SPACING]
+    outputExtent = [0, int((2*roiRadius[0])/volumeSpacing), 0,
+                              int((2*roiRadius[1])/volumeSpacing), 0,
+                              int((2*roiRadius[2])/volumeSpacing)]
+    return roiOrigin, outputExtent
