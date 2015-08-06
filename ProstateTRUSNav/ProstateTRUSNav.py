@@ -4,6 +4,7 @@ from GuideletLoadable import *
 import logging
 import os
 from subprocess import Popen
+from sys import platform as _platform
 
 
 class ProstateTRUSNav(GuideletLoadable):
@@ -45,33 +46,44 @@ class ProstateTRUSNavWidget(GuideletWidget):
       self.plusServerProcess.terminate()
 
   def setup(self):
+    showPlusServerWidget = True
+    if _platform == "linux" or _platform == "linux2" or _platform == "darwin": #linux or linux or OS X
+      message = "Attention: You are running Slicer on Linux or OS X. Do you have PlusServer installed on the current OS?"
+      result = qt.QMessageBox.question(slicer.util.mainWindow(), 'ProstateTRUSNav', message,
+                                     qt.QMessageBox.Yes | qt.QMessageBox.No)
+      showPlusServerWidget = result == qt.QMessageBox.Yes
 
-    plusServerCollapsibleButton = ctk.ctkCollapsibleButton()
-    self.layout.addWidget(plusServerCollapsibleButton)
-    self.configurationFileChooserButton = qt.QPushButton(self.configurationFile)
-    self.configurationFileChooserButton.connect('clicked()', self.onConfigFileSelected)
-    self.runPlusServerButton = qt.QPushButton("Run PlusServer")
-    self.runPlusServerButton.setCheckable(True)
-    self.runPlusServerButton.connect('clicked()', self.onRunPlusServerButtonClicked)
+    if _platform == "win32" or showPlusServerWidget:
+      # Windows...
+      plusServerCollapsibleButton = ctk.ctkCollapsibleButton()
+      plusServerCollapsibleButton.text = "PlusServer"
+      self.layout.addWidget(plusServerCollapsibleButton)
+      self.configurationFileChooserButton = qt.QPushButton(self.configurationFile)
+      self.configurationFileChooserButton.connect('clicked()', self.onConfigFileSelected)
+      self.runPlusServerButton = qt.QPushButton("Run PlusServer")
+      self.runPlusServerButton.setCheckable(True)
+      self.runPlusServerButton.connect('clicked()', self.onRunPlusServerButtonClicked)
 
-    self.serverFormLayout = qt.QFormLayout(plusServerCollapsibleButton)
+      self.serverFormLayout = qt.QFormLayout(plusServerCollapsibleButton)
 
-    self.serverExecutableChooserButton = qt.QPushButton(self.serverExecutable)
-    self.serverExecutableChooserButton.connect('clicked()', self.onServerExecutableSelected)
+      self.serverExecutableChooserButton = qt.QPushButton(self.serverExecutable)
+      self.serverExecutableChooserButton.connect('clicked()', self.onServerExecutableSelected)
 
-    hbox = qt.QHBoxLayout()
-    hbox.addWidget(self.serverExecutableChooserButton)
-    self.serverFormLayout.addRow(hbox)
+      hbox = qt.QHBoxLayout()
+      hbox.addWidget(self.serverExecutableChooserButton)
+      self.serverFormLayout.addRow(hbox)
 
-    hbox = qt.QHBoxLayout()
-    hbox.addWidget(self.configurationFileChooserButton)
-    hbox.addWidget(self.runPlusServerButton)
-    self.serverFormLayout.addRow(hbox)
+      hbox = qt.QHBoxLayout()
+      hbox.addWidget(self.configurationFileChooserButton)
+      hbox.addWidget(self.runPlusServerButton)
+      self.serverFormLayout.addRow(hbox)
+
     GuideletWidget.setup(self)
-    # do specific setup here
-    self.launchGuideletButton.setEnabled(False)
 
-    self.checkCommandAndArgument()
+    # do specific setup here
+    if _platform == "win32" or showPlusServerWidget:
+      self.launchGuideletButton.setEnabled(False)
+      self.checkCommandAndArgument()
 
   def checkCommandAndArgument(self):
     if os.path.exists(self.serverExecutable) and os.path.exists(self.configurationFile):
@@ -138,6 +150,7 @@ class ProstateTRUSNavWidget(GuideletWidget):
 
 
 class ProstateTRUSNavLogic(GuideletLogic):
+
   """Uses GuideletLogic base class, available at:
   """ 
 
@@ -552,10 +565,6 @@ class ProstateTRUSNavUltrasound(UltraSound):
     scoutScanVolumeNode = slicer.util.getNode(self.SCOUT_VOLUME_NODE_NAME)
     return scoutScanVolumeNode
 
-#
-# Functions called when commands/setting buttons are clicked
-#
-  # 1 - Commands buttons
   def onConnectDisconnectButtonClicked(self):
     if self.connectorNode.GetState() == slicer.vtkMRMLIGTLConnectorNode.STATE_CONNECTED:
       self.connectorNode.Stop()
@@ -612,9 +621,6 @@ class ProstateTRUSNavUltrasound(UltraSound):
       if self.roiNode:
         self.roiNode.SetDisplayVisibility(0)
 
-#
-# Filenames completion
-#
   def generateRecordingOutputFilename(self):
     return self.plusRemoteLogic.addTimestampToFilename(self.RECORDING_FILENAME)
 
@@ -627,9 +633,6 @@ class ProstateTRUSNavUltrasound(UltraSound):
   def getLiveReconstructionOutputFilename(self):
     return self.plusRemoteLogic.addTimestampToFilename(self.LIVE_VOLUME_FILENAME)
 
-#
-# Commands
-#
   def onStartRecording(self, filename):
     self.plusRemoteLogic.startRecording(self.connectorNode.GetID(), self.captureIDSelector.currentText,
                                         filename, self.printCommandResponse)
@@ -682,9 +685,11 @@ class ProstateTRUSNavUltrasound(UltraSound):
                                                          self.LIVE_VOLUME_NODE_NAME,
                                                          self.APPLY_HOLE_FILLING_FOR_SNAPSHOT, self.onSnapshotAcquired)
 
-#
-# Functions associated to commands
-#
+  def executeCommandDelayed(self, method, delay=100):
+    # Order of OpenIGTLink message receiving and processing is not guaranteed to be the same
+    # therefore we wait a bit to make sure the image message is processed as well
+    qt.QTimer.singleShot(delay, method)
+
   def printCommandResponse(self, command, q):
     statusText = "Command {0} [{1}]: {2}\n".format(command.GetCommandName(), command.GetID(),
                                                    command.StatusToString(command.GetStatus()))
@@ -765,7 +770,7 @@ class ProstateTRUSNavUltrasound(UltraSound):
       logging.debug("Volume Reconstruction: " + command.GetResponseMessage())
       return
 
-    qt.QTimer.singleShot(100, self.onVolumeReconstructedFinalize)
+    self.executeCommandDelayed(self.onVolumeReconstructedFinalize)
 
   def onVolumeReconstructedFinalize(self):
     applicationLogic = slicer.app.applicationLogic()
@@ -787,11 +792,7 @@ class ProstateTRUSNavUltrasound(UltraSound):
       logging.debug("Scout Volume Reconstruction: " + command.GetResponseMessage())
       return
 
-    scoutScanReconstructFileName = os.path.basename(command.GetResponseMessage())
-
-    # Order of OpenIGTLink message receiving and processing is not guaranteed to be the same
-    # therefore we wait a bit to make sure the image message is processed as well
-    qt.QTimer.singleShot(100, self.onScoutVolumeReconstructedFinalize)
+    self.executeCommandDelayed(self.onScoutVolumeReconstructedFinalize)
 
   def onScoutVolumeReconstructedFinalize(self):
     # Create and initialize ROI after scout scan because low resolution scout scan is used to set
@@ -813,9 +814,7 @@ class ProstateTRUSNavUltrasound(UltraSound):
       # live volume reconstruction is not active
       return
 
-    # Order of OpenIGTLink message receiving and processing is not guaranteed to be the same
-    # therefore we wait a bit to make sure the image message is processed as well
-    qt.QTimer.singleShot(100, self.onSnapshotAcquiredFinalize)
+    self.executeCommandDelayed(self.onSnapshotAcquiredFinalize)
 
   def onSnapshotAcquiredFinalize(self):
     self.guideletParent.showVolumeRendering(self.getLiveVolumeRecNode())
@@ -832,9 +831,7 @@ class ProstateTRUSNavUltrasound(UltraSound):
       logging.debug("LIVE Volume Reconstruction " + command.GetResponseMessage())
       return
 
-    # Order of OpenIGTLink message receiving and processing is not guaranteed to be the same
-    # therefore we wait a bit to make sure the image message is processed as well
-    qt.QTimer.singleShot(100, self.onVolumeLiveReconstructedFinalize)
+    self.executeCommandDelayed(self.getLiveVolumeRecNode)
 
   def onVolumeLiveReconstructedFinalize(self):
     self.guideletParent.showVolumeRendering(self.getLiveVolumeRecNode())
