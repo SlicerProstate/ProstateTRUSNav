@@ -1,15 +1,16 @@
-from __main__ import vtk, qt, ctk, slicer
-
-from GuideletLoadable import *
+from qt import QFormLayout, QHBoxLayout, QGridLayout, QLabel
+from qt import QSettings, QFileDialog, QMessageBox, QPushButton, QIcon, QComboBox, QSizePolicy, QToolButton, QTimer
+from ctk import ctkCollapsibleButton
+import slicer
 import logging
 import os
 from subprocess import Popen
 from sys import platform as _platform
 
+from GuideletLoadable import *
+
 
 class ProstateTRUSNav(GuideletLoadable):
-  """Uses GuideletLoadable class, available at:
-  """
 
   def __init__(self, parent):
     GuideletLoadable.__init__(self, parent)
@@ -24,12 +25,10 @@ class ProstateTRUSNav(GuideletLoadable):
     self.parent.acknowledgementText = """
     This file was originally developed by Jean-Christophe Fillion-Robin, Kitware Inc.
     and Steve Pieper, Isomics, Inc. and was partially funded by NIH grant 3P41RR013218-12S1.
-""" # replace with organization, grant and thanks.
+    """ # replace with organization, grant and thanks.
 
 
 class ProstateTRUSNavWidget(GuideletWidget):
-  """Uses GuideletWidget base class, available at:
-  """
 
   DEFAULT_PLUSSERVER_CHOOSER_TEXT = "Choose PlusServer.exe"
   DEFAULT_CONFIGURATION_CHOOSER_TEXT = "Select Configuration"
@@ -49,31 +48,31 @@ class ProstateTRUSNavWidget(GuideletWidget):
     showPlusServerWidget = True
     if _platform == "linux" or _platform == "linux2" or _platform == "darwin": #linux or linux or OS X
       message = "Attention: You are running Slicer on Linux or OS X. Do you have PlusServer installed on the current OS?"
-      result = qt.QMessageBox.question(slicer.util.mainWindow(), 'ProstateTRUSNav', message,
-                                     qt.QMessageBox.Yes | qt.QMessageBox.No)
-      showPlusServerWidget = result == qt.QMessageBox.Yes
+      result = QMessageBox.question(slicer.util.mainWindow(), 'ProstateTRUSNav', message,
+                                     QMessageBox.Yes | QMessageBox.No)
+      showPlusServerWidget = result == QMessageBox.Yes
 
     if _platform == "win32" or showPlusServerWidget:
       # Windows...
-      plusServerCollapsibleButton = ctk.ctkCollapsibleButton()
+      plusServerCollapsibleButton = ctkCollapsibleButton()
       plusServerCollapsibleButton.text = "PlusServer"
       self.layout.addWidget(plusServerCollapsibleButton)
-      self.configurationFileChooserButton = qt.QPushButton(self.configurationFile)
+      self.configurationFileChooserButton = QPushButton(self.configurationFile)
       self.configurationFileChooserButton.connect('clicked()', self.onConfigFileSelected)
-      self.runPlusServerButton = qt.QPushButton("Run PlusServer")
+      self.runPlusServerButton = QPushButton("Run PlusServer")
       self.runPlusServerButton.setCheckable(True)
       self.runPlusServerButton.connect('clicked()', self.onRunPlusServerButtonClicked)
 
-      self.serverFormLayout = qt.QFormLayout(plusServerCollapsibleButton)
+      self.serverFormLayout = QFormLayout(plusServerCollapsibleButton)
 
-      self.serverExecutableChooserButton = qt.QPushButton(self.serverExecutable)
+      self.serverExecutableChooserButton = QPushButton(self.serverExecutable)
       self.serverExecutableChooserButton.connect('clicked()', self.onServerExecutableSelected)
 
-      hbox = qt.QHBoxLayout()
+      hbox = QHBoxLayout()
       hbox.addWidget(self.serverExecutableChooserButton)
       self.serverFormLayout.addRow(hbox)
 
-      hbox = qt.QHBoxLayout()
+      hbox = QHBoxLayout()
       hbox.addWidget(self.configurationFileChooserButton)
       hbox.addWidget(self.runPlusServerButton)
       self.serverFormLayout.addRow(hbox)
@@ -83,21 +82,21 @@ class ProstateTRUSNavWidget(GuideletWidget):
     # do specific setup here
     if _platform == "win32" or showPlusServerWidget:
       self.launchGuideletButton.setEnabled(False)
-      self.checkCommandAndArgument()
+      self.checkExecutableAndArgument()
 
-  def checkCommandAndArgument(self):
+  def checkExecutableAndArgument(self):
     if os.path.exists(self.serverExecutable) and os.path.exists(self.configurationFile):
       self.runPlusServerButton.setEnabled(True)
     else:
       self.runPlusServerButton.setEnabled(False)
 
   def getSetting(self, settingName, defaultValue=""):
-    settings = qt.QSettings()
+    settings = QSettings()
     value = settings.value(self.moduleName + '/' + settingName, defaultValue)
     return value if value is not None and value != "" else defaultValue
 
   def setSetting(self, settingName, value):
-    settings = qt.QSettings()
+    settings = QSettings()
     settings.setValue(self.moduleName + '/'+ settingName, value)
 
   def addLauncherWidgets(self):
@@ -105,21 +104,21 @@ class ProstateTRUSNavWidget(GuideletWidget):
     # add launcher widget here
 
   def onServerExecutableSelected(self):
-    executable = qt.QFileDialog.getOpenFileName(self.parent, "PlusServer Executable",
+    executable = QFileDialog.getOpenFileName(self.parent, "PlusServer Executable",
                                                 self.serverExecutable, "*.exe")
     if executable != "" and executable.find("PlusServer.exe"):
       self.serverExecutable = executable
       self.serverExecutableChooserButton.setText(executable)
       self.setSetting("PlusServer", executable)
-    self.checkCommandAndArgument()
+    self.checkExecutableAndArgument()
 
   def onConfigFileSelected(self):
-    self.configurationFile = qt.QFileDialog.getOpenFileName(self.parent, "Choose Configuration File",
+    self.configurationFile = QFileDialog.getOpenFileName(self.parent, "Choose Configuration File",
                                                             self.configurationFile, "*.xml")
     if self.configurationFile != "":
       self.configurationFileChooserButton.setText(os.path.split(self.configurationFile)[1])
       self.setSetting("ConfigurationFile", self.configurationFile)
-    self.checkCommandAndArgument()
+    self.checkExecutableAndArgument()
 
   def onRunPlusServerButtonClicked(self):
     if self.runPlusServerButton.isChecked():
@@ -151,16 +150,12 @@ class ProstateTRUSNavWidget(GuideletWidget):
 
 class ProstateTRUSNavLogic(GuideletLogic):
 
-  """Uses GuideletLogic base class, available at:
-  """ 
-
   def __init__(self, parent = None):
     GuideletLogic.__init__(self, parent)
 
+
 class ProstateTRUSNavTest(GuideletTest):
-  """This is the test case for your scripted module.
-  """
-  
+
   def runTest(self):
     """Run as few or as many tests as needed here.
     """
@@ -210,7 +205,7 @@ class ProstateTRUSNavGuidelet(Guidelet):
     self.sliceletDockWidget.setWindowTitle('ProstateTRUSNav')
     
     self.mainWindow.setWindowTitle('ProstateTRUSNavigation')
-    self.mainWindow.windowIcon = qt.QIcon(moduleDirectoryPath + '/Resources/Icons/ProstateTRUSNav.png')
+    self.mainWindow.windowIcon = QIcon(moduleDirectoryPath + '/Resources/Icons/ProstateTRUSNav.png')
 
     # Set needle and cautery transforms and models
     self.setupScene()
@@ -231,7 +226,6 @@ class ProstateTRUSNavGuidelet(Guidelet):
   def cleanup(self):
     Guidelet.cleanup(self)
     logging.debug('cleanup')
-
 
   def setupConnections(self):#find common connections, add specials in overridden method
     logging.debug('ProstateTRUSNav.setupConnections()')
@@ -328,59 +322,59 @@ class ProstateTRUSNavUltrasound(UltraSound):
     self.connectorNode = self.guideletParent.connectorNode
     self.connectorNodeConnected = False
 
-    collapsibleButton = ctk.ctkCollapsibleButton()
+    collapsibleButton = ctkCollapsibleButton()
     collapsibleButton.setProperty('collapsedHeight', 20)
     setButtonStyle(collapsibleButton, 2.0)
     collapsibleButton.text = "Ultrasound"
     parentWidget.addWidget(collapsibleButton)
 
-    ultrasoundLayout = qt.QFormLayout(collapsibleButton)
+    ultrasoundLayout = QFormLayout(collapsibleButton)
     ultrasoundLayout.setContentsMargins(12,4,4,4)
     ultrasoundLayout.setSpacing(4)
 
-    self.connectDisconnectButton = qt.QPushButton("Connect")
+    self.connectDisconnectButton = QPushButton("Connect")
     self.connectDisconnectButton.setToolTip("If clicked, connection OpenIGTLink")
 
-    hbox = qt.QHBoxLayout()
+    hbox = QHBoxLayout()
     hbox.addWidget(self.connectDisconnectButton)
     ultrasoundLayout.addRow(hbox)
 
     self.setupIcons()
 
-    self.captureIDSelector = qt.QComboBox()
+    self.captureIDSelector = QComboBox()
     self.captureIDSelector.setToolTip("Pick capture device ID")
-    self.captureIDSelector.setSizePolicy(qt.QSizePolicy.Expanding, qt.QSizePolicy.Expanding)
+    self.captureIDSelector.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-    self.volumeReconstructorIDSelector = qt.QComboBox()
+    self.volumeReconstructorIDSelector = QComboBox()
     self.volumeReconstructorIDSelector.setToolTip( "Pick volume reconstructor device ID" )
-    self.volumeReconstructorIDSelector.setSizePolicy(qt.QSizePolicy.Expanding, qt.QSizePolicy.Expanding)
+    self.volumeReconstructorIDSelector.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-    self.startStopRecordingButton = qt.QPushButton("  Start Recording")
+    self.startStopRecordingButton = QPushButton("  Start Recording")
     self.startStopRecordingButton.setCheckable(True)
     self.startStopRecordingButton.setIcon(self.recordIcon)
     self.startStopRecordingButton.setEnabled(False)
     self.startStopRecordingButton.setToolTip("If clicked, start recording")
-    self.startStopRecordingButton.setSizePolicy(qt.QSizePolicy.Expanding, qt.QSizePolicy.Expanding)
+    self.startStopRecordingButton.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-    recordParametersControlsLayout = qt.QGridLayout()
+    recordParametersControlsLayout = QGridLayout()
 
     self.filenameLabel = self.createLabel("Filename:", visible=False)
     recordParametersControlsLayout.addWidget(self.filenameLabel, 1, 0)
 
      # Offline Reconstruction
-    self.offlineReconstructButton = qt.QPushButton("  Offline Reconstruction")
+    self.offlineReconstructButton = QPushButton("  Offline Reconstruction")
     self.offlineReconstructButton.setCheckable(True)
     self.offlineReconstructButton.setIcon(self.recordIcon)
     self.offlineReconstructButton.setEnabled(False)
     self.offlineReconstructButton.setToolTip("If clicked, reconstruct recorded volume")
-    self.offlineReconstructButton.setSizePolicy(qt.QSizePolicy.Expanding, qt.QSizePolicy.Expanding)
+    self.offlineReconstructButton.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-    self.offlineVolumeToReconstructSelector = qt.QComboBox()
+    self.offlineVolumeToReconstructSelector = QComboBox()
     self.offlineVolumeToReconstructSelector.setEditable(True)
     self.offlineVolumeToReconstructSelector.setToolTip( "Pick/set volume to reconstruct" )
     self.offlineVolumeToReconstructSelector.visible = False
 
-    hbox = qt.QHBoxLayout()
+    hbox = QHBoxLayout()
     hbox.addWidget(self.startStopRecordingButton)
     hbox.addWidget(self.offlineReconstructButton)
     ultrasoundLayout.addRow(hbox)
@@ -388,32 +382,32 @@ class ProstateTRUSNavUltrasound(UltraSound):
     # Scout scan (record and low resolution reconstruction) and live reconstruction
     # Scout scan part
 
-    self.startStopScoutScanButton = qt.QPushButton("  Scout scan\n  Start recording")
+    self.startStopScoutScanButton = QPushButton("  Scout scan\n  Start recording")
     self.startStopScoutScanButton.setCheckable(True)
     self.startStopScoutScanButton.setIcon(self.recordIcon)
     self.startStopScoutScanButton.setToolTip("If clicked, start recording")
     self.startStopScoutScanButton.setEnabled(False)
-    self.startStopScoutScanButton.setSizePolicy(qt.QSizePolicy.Expanding, qt.QSizePolicy.Expanding)
+    self.startStopScoutScanButton.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-    self.startStopLiveReconstructionButton = qt.QPushButton("  Start live reconstruction")
+    self.startStopLiveReconstructionButton = QPushButton("  Start live reconstruction")
     self.startStopLiveReconstructionButton.setCheckable(True)
     self.startStopLiveReconstructionButton.setIcon(self.recordIcon)
     self.startStopLiveReconstructionButton.setToolTip("If clicked, start live reconstruction")
     self.startStopLiveReconstructionButton.setEnabled(False)
-    self.startStopLiveReconstructionButton.setSizePolicy(qt.QSizePolicy.Expanding, qt.QSizePolicy.Expanding)
+    self.startStopLiveReconstructionButton.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-    self.displayRoiButton = qt.QToolButton()
+    self.displayRoiButton = QToolButton()
     self.displayRoiButton.setCheckable(True)
     self.displayRoiButton.setIcon(self.visibleOffIcon)
     self.displayRoiButton.setToolTip("If clicked, display ROI")
 
-    hbox = qt.QHBoxLayout()
+    hbox = QHBoxLayout()
     hbox.addWidget(self.startStopScoutScanButton)
     hbox.addWidget(self.startStopLiveReconstructionButton)
     # hbox.addWidget(self.displayRoiButton)
     ultrasoundLayout.addRow(hbox)
 
-    self.snapshotTimer = qt.QTimer()
+    self.snapshotTimer = QTimer()
     self.snapshotTimer.setSingleShot(True)
 
     self.onParameterSetSelected()
@@ -437,13 +431,13 @@ class ProstateTRUSNavUltrasound(UltraSound):
       logging.warning('Logic not found for Volume Reslice Driver')
 
   def createCollapsibleButton(self, text, collapsed=False):
-    collapsibleButton = ctk.ctkCollapsibleButton()
+    collapsibleButton = ctkCollapsibleButton()
     collapsibleButton.text = text
     collapsibleButton.collapsed = collapsed
     return collapsibleButton
 
   def createLabel(self, text, visible=True):
-    label = qt.QLabel()
+    label = QLabel()
     label.setText(text)
     label.visible = visible
     return label
@@ -476,11 +470,11 @@ class ProstateTRUSNavUltrasound(UltraSound):
 
   def setupIcons(self):
     self.plusRemoteModuleDirectoryPath = slicer.modules.plusremote.path.replace("PlusRemote.py", "")
-    self.recordIcon = qt.QIcon(self.plusRemoteModuleDirectoryPath + '/Resources/Icons/icon_Record.png')
-    self.stopIcon = qt.QIcon(self.plusRemoteModuleDirectoryPath + '/Resources/Icons/icon_Stop.png')
-    self.waitIcon = qt.QIcon(self.plusRemoteModuleDirectoryPath + '/Resources/Icons/icon_Wait.png')
-    self.visibleOffIcon = qt.QIcon(":Icons\VisibleOff.png")
-    self.visibleOnIcon = qt.QIcon(":Icons\VisibleOn.png")
+    self.recordIcon = QIcon(self.plusRemoteModuleDirectoryPath + '/Resources/Icons/icon_Record.png')
+    self.stopIcon = QIcon(self.plusRemoteModuleDirectoryPath + '/Resources/Icons/icon_Stop.png')
+    self.waitIcon = QIcon(self.plusRemoteModuleDirectoryPath + '/Resources/Icons/icon_Wait.png')
+    self.visibleOffIcon = QIcon(":Icons\VisibleOff.png")
+    self.visibleOnIcon = QIcon(":Icons\VisibleOn.png")
 
   def onParameterSetSelected(self):
     # Set up default values for new nodes
@@ -688,7 +682,7 @@ class ProstateTRUSNavUltrasound(UltraSound):
   def executeCommandDelayed(self, method, delay=100):
     # Order of OpenIGTLink message receiving and processing is not guaranteed to be the same
     # therefore we wait a bit to make sure the image message is processed as well
-    qt.QTimer.singleShot(delay, method)
+    QTimer.singleShot(delay, method)
 
   def printCommandResponse(self, command, q):
     statusText = "Command {0} [{1}]: {2}\n".format(command.GetCommandName(), command.GetID(),
