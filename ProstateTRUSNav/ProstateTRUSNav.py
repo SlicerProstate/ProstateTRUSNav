@@ -254,7 +254,7 @@ class ProstateTRUSNavGuidelet(Guidelet):
     Guidelet.setupScene(self)
 
   def showDefaultView(self):
-    self.onViewSelect(self.viewUltrasound3d)
+    self.selectView(self.VIEW_ULTRASOUND_3D)
 
   def onGetVolumeReconstructorDeviceCommandResponseReceived(self, command, q):
 
@@ -286,7 +286,7 @@ class ProstateTRUSNavUltrasound(UltraSound):
   LIVE_VOLUME_NODE_NAME = "liveReconstruction"
 
   APPLY_HOLE_FILLING_FOR_SNAPSHOT = False
-  SNAPSHOT_INTERVAL = 1
+  SNAPSHOT_INTERVAL = 3
   OUTPUT_VOLUME_SPACING = 3
   LIVE_OUTPUT_VOLUME_SPACING = 1
 

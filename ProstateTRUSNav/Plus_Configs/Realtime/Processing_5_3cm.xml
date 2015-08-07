@@ -1,0 +1,95 @@
+<PlusConfiguration version="2.1">
+  <DataCollection StartupDelaySec="1.0" >
+	<DeviceSet 
+	Name="PROCESSING BK8818E depth 5.3cm w Slicer post calibration" 
+	Description="Epiphan frame grabber with Ascension EM trackers. Sensors in order: Red (111), Green (222), Blue (unmarked)."/>
+    
+	<Device
+      Id="TrackedVideoDevice"
+      Type="OpenIGTLinkVideo"      
+      MessageType="TRACKEDFRAME"
+      ServerAddress="127.0.0.1"
+      ServerPort="18000"
+      IgtlMessageCrcCheckEnabled="false"
+      LocalTimeOffsetSec="0" >
+      <DataSources>
+        <DataSource Type="Video" Id="Video" PortUsImageOrientation="MN"  />
+      </DataSources>      
+      <OutputChannels>
+        <OutputChannel Id="TrackedVideoStream" VideoDataSourceId="Video" />
+      </OutputChannels>
+    </Device>
+	
+	<Device
+      Id="CaptureDevice"
+      AcquisitionRate="8"
+      RequestedFrameRate="30"
+      Type="VirtualDiscCapture"
+      BaseFilename="Record.mha"
+      EnableCapturing="FALSE" >
+      <InputChannels>
+        <InputChannel Id="TrackedVideoStream" />
+      </InputChannels>
+    </Device>
+	
+	<Device
+      Id="VolumeReconstructorDevice"
+      Type="VirtualVolumeReconstructor">
+      <InputChannels>
+        <InputChannel Id="TrackedVideoStream" />
+      </InputChannels>
+      <VolumeReconstruction
+        ImageCoordinateFrame="Image" ReferenceCoordinateFrame="Reference"
+        Interpolation="NEAREST_NEIGHBOR" Optimization="NONE" Compounding="OFF" FillHoles="OFF" NumberOfThreads="2"
+        FanAngles="-45 45" FanOrigin="613 193" FanDepth="600"
+		OutputOrigin="-34 -144 -59" OutputExtent="0 150 0 130 0 70" OutputSpacing="0.5 0.5 0.5" 
+		ClipRectangleOrigin="278 283" ClipRectangleSize="670 600"/>
+    </Device>
+	
+    <!-- <Device
+      Id="VolumeReconstructorDevice"
+      Type="VirtualVolumeReconstructor"
+      OutputVolDeviceName="RecVol_Reference">
+      <InputChannels>
+        <InputChannel Id="TrackedVideoStream" />
+      </InputChannels>
+      <VolumeReconstruction
+        ImageCoordinateFrame="Image" ReferenceCoordinateFrame="Reference"
+        Interpolation="LINEAR" Optimization="NONE" CompoundingMode="MEAN" FillHoles="OFF" NumberOfThreads="2"
+        ClipRectangleOrigin="0 0" ClipRectangleSize="820 616"
+        OutputOrigin="-15 -15 30" OutputExtent="0 300 0 300 0 300" OutputSpacing="0.15 0.15 0.15" />
+    </Device> -->
+  </DataCollection>
+    
+  <PlusOpenIGTLinkServer 
+    MaxNumberOfIgtlMessagesToSend="1" 
+    MaxTimeSpentWithProcessingMs="10" 
+    ListeningPort="18944" 
+    SendValidTransformsOnly="true" 
+    OutputChannelId="TrackedVideoStream" > 
+    <DefaultClientInfo> 
+      <MessageTypes> 
+        <Message Type="IMAGE" />
+        <Message Type="TRANSFORM" />
+      </MessageTypes>
+      <TransformNames>
+        <Transform Name="StylusToReference"/>
+		<Transform Name="ImageToReference"/>
+      </TransformNames>
+	  <ImageNames>
+   	    <Image Name="Image" EmbeddedTransformToFrame="Reference" />
+	  </ImageNames>
+    </DefaultClientInfo>
+  </PlusOpenIGTLinkServer>
+  
+  <CoordinateDefinitions>
+    <Transform From="Image" To="Probe"
+		Matrix="
+           -0.00625236  -0.0934791  -0.000162447  253.598
+			0.00193054  -0.0002919  0.0936677  -0.272276
+		   -0.0934593  0.00624765  0.00194572  14.6551
+		   0  0  0  1"
+       Error="0.8" Date="20150325"/>
+  </CoordinateDefinitions>
+    
+</PlusConfiguration>

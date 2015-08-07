@@ -1,0 +1,108 @@
+<PlusConfiguration version="2.3" PlusRevision="Plus-2.1.0.3427">
+  <DataCollection StartupDelaySec="1">
+    <DeviceSet Name="BK8818E depth 5.3cm w Slicer post calibration" Description="Epiphan frame grabber with Ascension EM trackers. Sensors in order: Red (111), Green (222), Blue (unmarked)."/>
+    <Device
+      Id="TrackerDevice"
+      Type="Ascension3DG"
+      AcquisitionRate="10"
+      LocalTimeOffsetSec="0.15"
+      FilterAcWideNotch="1"
+      FilterAcNarrowNotch="0"
+      FilterDcAdaptive="0"
+      FilterLargeChange="0"
+      FilterAlpha="0"
+      ToolReferenceFrame="Tracker">
+      <DataSources>
+        <DataSource Type="Tool" Id="Stylus" BufferSize="500" PortName="0" AveragedItemsForFiltering="20"/>
+        <DataSource Type="Tool" Id="Probe" BufferSize="500" PortName="1" AveragedItemsForFiltering="20"/>
+        <DataSource Type="Tool" Id="Reference" BufferSize="500" PortName="2" AveragedItemsForFiltering="20"/>
+      </DataSources>
+      <OutputChannels>
+        <OutputChannel Id="TrackerStream">
+          <DataSource Id="Probe"/>
+          <DataSource Id="Reference"/>
+	  <DataSource Id="Stylus"/>
+        </OutputChannel>
+      </OutputChannels>
+    </Device>
+
+    <Device
+      Id="VideoDevice"
+      Type="Epiphan"
+      AcquisitionRate="30"
+      LocalTimeOffsetSec="0"
+      VideoFormat="Y8"
+      ClipRectangleOrigin="0 0"
+      ClipRectangleSize="0 0">
+      <DataSources>
+        <DataSource Type="Video" Id="Video" PortUsImageOrientation="MN" BufferSize="100" AveragedItemsForFiltering="20"/>
+      </DataSources>
+      <OutputChannels>
+        <OutputChannel Id="VideoStream" VideoDataSourceId="Video"/>
+      </OutputChannels>
+    </Device>
+
+    <Device Id="TrackedVideoDevice" Type="VirtualMixer" LocalTimeOffsetSec="0">
+      <InputChannels>
+        <InputChannel Id="TrackerStream"/>
+        <InputChannel Id="VideoStream"/>
+      </InputChannels>
+      <OutputChannels>
+        <OutputChannel Id="TrackedVideoStream"/>
+      </OutputChannels>
+    </Device>
+
+	<Device
+      Id="CaptureDevice"
+      AcquisitionRate="8"
+      RequestedFrameRate="30"
+      Type="VirtualDiscCapture"
+      BaseFilename="Record.mha"
+      EnableCapturing="FALSE" >
+      <InputChannels>
+        <InputChannel Id="TrackedVideoStream" />
+      </InputChannels>
+    </Device>
+
+	 <Device
+      Id="VolumeReconstructorDevice"
+      Type="VirtualVolumeReconstructor">
+      <InputChannels>
+        <InputChannel Id="TrackedVideoStream" />
+      </InputChannels>
+      <VolumeReconstruction
+        ImageCoordinateFrame="Image" ReferenceCoordinateFrame="Reference"
+        Interpolation="NEAREST_NEIGHBOR" Optimization="NONE" Compounding="OFF" FillHoles="OFF" NumberOfThreads="2"
+        FanAngles="-45 45" FanOrigin="613 193" FanDepth="600"
+		OutputOrigin="-34 -144 -59" OutputExtent="0 150 0 130 0 70" OutputSpacing="0.5 0.5 0.5" 
+		ClipRectangleOrigin="278 283" ClipRectangleSize="670 600"/>
+    </Device>
+
+  </DataCollection>
+
+  <PlusOpenIGTLinkServer MaxNumberOfIgtlMessagesToSend="1" MaxTimeSpentWithProcessingMs="10" ListeningPort="18944" OutputChannelId="TrackedVideoStream">
+    <DefaultClientInfo>
+      <MessageTypes>
+        <Message Type="TRANSFORM"/>
+        <Message Type="IMAGE"/>
+      </MessageTypes>
+      <TransformNames>
+        <Transform Name="StylusToReference"/>
+		<Transform Name="ImageToReference"/>
+      </TransformNames>
+      <ImageNames>
+        <Image Name="Image" EmbeddedTransformToFrame="Reference"/>
+      </ImageNames>
+    </DefaultClientInfo>
+  </PlusOpenIGTLinkServer>
+
+  <CoordinateDefinitions>
+    <Transform From="Image" To="Probe"
+		Matrix="
+           -0.00625236  -0.0934791  -0.000162447  253.598
+			0.00193054  -0.0002919  0.0936677  -0.272276
+		   -0.0934593  0.00624765  0.00194572  14.6551
+		   0  0  0  1"
+       Error="0.8" Date="20150325"/>
+  </CoordinateDefinitions>
+</PlusConfiguration>
