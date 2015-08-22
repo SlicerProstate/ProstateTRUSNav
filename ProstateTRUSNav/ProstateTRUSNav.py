@@ -279,7 +279,7 @@ class ProstateTRUSNavUltrasound(UltraSound):
 
   RECORDING_FILENAME = "Recording.mha"
   SCOUT_RECORDING_FILENAME = "ScoutScanRecording.mha"
-  LIVE_RECORDING_FILENAME = "LiveRecording.mha"
+  LIVE_RECORDING_FILENAME = LIVE_VOLUME_FILENAME
 
   SCOUT_VOLUME_NODE_NAME = "ScoutScan"
   OFFLINE_VOLUME_NODE_NAME = "RecVol_Reference"
