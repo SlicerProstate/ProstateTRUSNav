@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 2.8.9)
 
-project(ProstateTrusNav)
+project(ProstateTRUSNav)
 
 #-----------------------------------------------------------------------------
 # Extension meta-information
@@ -18,7 +18,7 @@ include(${Slicer_USE_FILE})
 
 #-----------------------------------------------------------------------------
 # Extension modules
-add_subdirectory(ProstateTrusNav)
+add_subdirectory(ProstateTRUSNav)
 ## NEXT_MODULE
 
 #-----------------------------------------------------------------------------

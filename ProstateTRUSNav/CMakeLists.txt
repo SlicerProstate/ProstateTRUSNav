@@ -1,5 +1,5 @@
 #-----------------------------------------------------------------------------
-set(MODULE_NAME ProstateTrusNav)
+set(MODULE_NAME ProstateTRUSNav)
 
 #-----------------------------------------------------------------------------
 set(MODULE_PYTHON_SCRIPTS
